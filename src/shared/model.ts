@@ -27,6 +27,7 @@ export interface CreatureState {
   id: string;
   speciesId: SpeciesId;
   position: Vec3;
+  facing: Vec3;
   alive: boolean;
   health: number;
   hunger: number;
@@ -62,6 +63,7 @@ export interface WorldState {
   items: ItemState[];
   nests: NestState[];
   shipPosition: Vec3;
+  componentExposed: boolean;
   componentInstalled: boolean;
 }
 

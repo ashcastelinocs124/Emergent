@@ -33,7 +33,8 @@ export function createVisor(root: HTMLElement): Visor {
         ? 'Board the ship to leave the planet.'
         : world.player.inventory.some(item => item.kind === 'component')
           ? 'Return to your ship and install the drive regulator.'
-          : 'Find the missing drive regulator beyond the nesting grounds.';
+          : world.componentExposed ? 'Regulator exposed. Recover it from the clutch.'
+            : 'Drive signal traced into the nesting grounds.';
       const carryingComponent = world.player.inventory.some(item => item.kind === 'component');
       const objective = carryingComponent || world.componentInstalled ? world.shipPosition
         : world.items.find(item => item.kind === 'component' && item.available)?.position;

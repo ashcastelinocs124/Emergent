@@ -24,6 +24,18 @@ describe('fixed-step creature actions', () => {
     expect(result.world.creatures[0].position.x).toBeLessThan(0);
   });
 
+  test('a guardian stops an attack as soon as the egg is no longer carried', () => {
+    const guardian = creature('guardian-1', 'guardian', at(1, 0));
+    guardian.currentIntent = { action: 'DEFEND', targetId: 'player' };
+    guardian.actionEndsAt = 20;
+    const scene = world([guardian]);
+    scene.player.position = at(0, 0);
+    const after = stepWorld(scene, .05);
+    expect(after.world.player.health).toBe(1);
+    expect(after.world.creatures[0].currentIntent).toBeNull();
+    expect(after.events).toHaveLength(0);
+  });
+
   test('EAT consumes food only after reaching it', () => {
     const grazer = creature('g', 'grazer');
     grazer.currentIntent = { action: 'EAT', targetId: 'spore-1' };

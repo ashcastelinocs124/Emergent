@@ -12,6 +12,7 @@ function move(creature: CreatureState, target: Vec3, dt: number, away = false): 
   if (length < .001) return;
   const step = Math.min(speed[creature.speciesId] * dt, away ? speed[creature.speciesId] * dt : length);
   const sign = away ? -1 : 1;
+  creature.facing = { x: dx / length * sign, y: 0, z: dz / length * sign };
   creature.position.x = Math.max(-145, Math.min(145, creature.position.x + dx / length * step * sign));
   creature.position.z = Math.max(-145, Math.min(145, creature.position.z + dz / length * step * sign));
 }
@@ -27,7 +28,7 @@ export function stepWorld(world: WorldState, dt: number): { world: WorldState; e
   const next: WorldState = {
     ...world, time: world.time + dt,
     player: { ...world.player, position: { ...world.player.position }, inventory: [...world.player.inventory] },
-    creatures: world.creatures.map(creature => ({ ...creature, position: { ...creature.position } })),
+    creatures: world.creatures.map(creature => ({ ...creature, position: { ...creature.position }, facing: { ...creature.facing } })),
     items: world.items.map(item => ({ ...item, position: { ...item.position } })),
   };
   const events: CreatureEvent[] = [];
@@ -56,6 +57,11 @@ export function stepWorld(world: WorldState, dt: number): { world: WorldState; e
     switch (intent.action) {
       case 'HUNT':
       case 'DEFEND':
+        if (intent.action === 'DEFEND' && intent.targetId === 'player' && !next.player.inventory.some(item =>
+          item.kind === 'egg' && item.ownerSpecies === creature.speciesId)) {
+          finish(creature, next.time);
+          break;
+        }
         if (target) {
           move(creature, target, dt);
           if (distance(creature.position, target) <= 1.4) {
@@ -147,8 +153,13 @@ export function createInitialWorld(seed: number, shipPosition: Vec3, nestPositio
     do {
       const center = kind === 'guardian' ? nestPosition : kind === 'grazer' ? { x: 5, y: 0, z: -28 } : { x: 42, y: 0, z: -12 };
       position = { x: center.x + (rng() - .5) * 45, y: 0, z: center.z + (rng() - .5) * 45 };
-    } while (distance(position, shipPosition) <= 8);
-    creatures.push({ id: `${kind}-${i + 1}`, speciesId: kind, position, alive: true, health: 1,
+    } while (distance(position, shipPosition) <= 8 || (kind === 'guardian' && distance(position, nestPosition) < 7));
+    const towardNestX = nestPosition.x - position.x;
+    const towardNestZ = nestPosition.z - position.z;
+    const facingLength = Math.hypot(towardNestX, towardNestZ) || 1;
+    const facing = kind === 'guardian' ? { x: towardNestX / facingLength, y: 0, z: towardNestZ / facingLength }
+      : { x: Math.sin(i * 2.1), y: 0, z: Math.cos(i * 2.1) };
+    creatures.push({ id: `${kind}-${i + 1}`, speciesId: kind, position, facing, alive: true, health: 1,
       hunger: .25 + rng() * .6, fear: 0, mateDrive: rng(), memory: { events: [], disposition: 0 },
       currentIntent: null, actionEndsAt: 0, nextDecisionAt: .12 + creatures.length * .22,
       decisionEpoch: 0 });
@@ -157,9 +168,9 @@ export function createInitialWorld(seed: number, shipPosition: Vec3, nestPositio
     position: { x: -20 + rng() * 75, y: 0, z: -60 + rng() * 65 }, available: true }));
   for (let i = 0; i < 5; i++) items.push({ id: `egg-${i + 1}`, kind: 'egg', ownerSpecies: 'guardian',
     position: { x: nestPosition.x + Math.cos(i * 2.4) * 2.2, y: 0, z: nestPosition.z + Math.sin(i * 2.4) * 2.2 }, available: true });
-  items.push({ id: 'ship-component', kind: 'component', position: { x: nestPosition.x + 19.1, y: 0, z: nestPosition.z + 13.6 }, available: true });
+  items.push({ id: 'ship-component', kind: 'component', position: { x: nestPosition.x + 2.7, y: 0, z: nestPosition.z + .5 }, available: true });
   return { time: 0, player: { id: 'player', position: { ...shipPosition }, inventory: [], air: 1, power: 1,
     food: 1, health: 1, hidden: false, scannerOn: false }, creatures, items,
     nests: [{ id: 'guardian-nest', speciesId: 'guardian', position: { ...nestPosition }, radius: 16 }],
-    shipPosition: { ...shipPosition }, componentInstalled: false };
+    shipPosition: { ...shipPosition }, componentExposed: false, componentInstalled: false };
 }

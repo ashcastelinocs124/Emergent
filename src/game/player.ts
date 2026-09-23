@@ -12,10 +12,12 @@ export function findInteractionTarget(world: WorldState, camera: THREE.Camera): 
   camera.getWorldDirection(look);
   const origin = camera.position;
   const targets = world.items.filter(item => item.available).map(item => ({
-    id: item.id, label: LABELS[item.kind], point: new THREE.Vector3(item.position.x, terrainHeight(item.position.x, item.position.z) + .8, item.position.z),
+    id: item.id, label: item.kind === 'component' && !world.componentExposed ? 'Inspect trapped drive regulator' : LABELS[item.kind],
+    point: new THREE.Vector3(item.position.x, terrainHeight(item.position.x, item.position.z) + .8, item.position.z),
+    priority: item.kind === 'component' && !world.componentExposed ? 3 : 0,
   }));
   targets.push({ id: 'ship-console', label: world.componentInstalled ? 'Board ship' : 'Install drive regulator',
-    point: new THREE.Vector3(world.shipPosition.x + 2, world.shipPosition.y + 1.7, world.shipPosition.z) });
+    point: new THREE.Vector3(world.shipPosition.x + 2, world.shipPosition.y + 1.7, world.shipPosition.z), priority: 0 });
   let nearest: VisorTarget | null = null;
   let best = Infinity;
   for (const target of targets) {
@@ -23,12 +25,13 @@ export function findInteractionTarget(world: WorldState, camera: THREE.Camera): 
     const distance = delta.length();
     if (distance > (target.id === 'ship-console' ? 8 : 3.5) || distance < .3) continue;
     if (delta.normalize().dot(look) < .7) continue;
-    if (distance < best) { nearest = { id: target.id, label: target.label }; best = distance; }
+    const score = distance + target.priority;
+    if (score < best) { nearest = { id: target.id, label: target.label }; best = score; }
   }
   return nearest;
 }
 
-export function creatureVisibility(camera: THREE.Camera, position: Vec3): Visibility {
+export function creatureVisibility(camera: THREE.Camera, position: Vec3, occluders: THREE.Object3D[] = []): Visibility {
   const origin = camera.position;
   const target = new THREE.Vector3(position.x, terrainHeight(position.x, position.z) + 1.5, position.z);
   const ray = target.clone().sub(origin);
@@ -43,6 +46,12 @@ export function creatureVisibility(camera: THREE.Camera, position: Vec3): Visibi
     const z = origin.z + (target.z - origin.z) * t;
     const rayHeight = origin.y + (target.y - origin.y) * t;
     if (terrainHeight(x, z) > rayHeight - .35) { lineOfSight = false; break; }
+  }
+  if (lineOfSight && occluders.length) {
+    const direction = target.clone().sub(origin);
+    const range = direction.length();
+    const raycaster = new THREE.Raycaster(origin, direction.normalize(), 0, Math.max(0, range - .5));
+    lineOfSight = raycaster.intersectObjects(occluders, false).length === 0;
   }
   return { lineOfSight, distance, orientation };
 }

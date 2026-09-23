@@ -1,8 +1,26 @@
-import type { PlayerState, Vec3, WorldState } from './model';
+import type { CreatureState, PlayerState, Vec3, WorldState } from './model';
 import { applyMemoryEvent } from './memory';
+import { terrainHeight } from './terrain';
 
 const distance = (a: Vec3, b: Vec3): number => Math.hypot(a.x - b.x, a.z - b.z);
 const clamp = (value: number): number => Math.max(0, Math.min(1, value));
+
+export function witnessesTheft(creature: CreatureState, world: WorldState): boolean {
+  if (!creature.alive || world.player.hidden || distance(creature.position, world.player.position) > 18) return false;
+  const dx = world.player.position.x - creature.position.x;
+  const dz = world.player.position.z - creature.position.z;
+  const length = Math.hypot(dx, dz) || 1;
+  if ((creature.facing.x * dx + creature.facing.z * dz) / length < -.2) return false;
+  const fromY = terrainHeight(creature.position.x, creature.position.z) + 2;
+  const toY = terrainHeight(world.player.position.x, world.player.position.z) + 1.5;
+  for (let step = 1; step < 8; step++) {
+    const t = step / 8;
+    const x = creature.position.x + dx * t;
+    const z = creature.position.z + dz * t;
+    if (terrainHeight(x, z) > fromY + (toY - fromY) * t - .35) return false;
+  }
+  return true;
+}
 
 export function tickSuit(player: PlayerState, dt: number, shipPosition: Vec3): PlayerState {
   const inShelter = distance(player.position, shipPosition) <= 10;
@@ -15,19 +33,22 @@ export function tickSuit(player: PlayerState, dt: number, shipPosition: Vec3): P
 
 export function interact(world: WorldState, targetId: string): WorldState {
   const item = world.items.find(candidate => candidate.id === targetId && candidate.available);
-  if (!item || distance(world.player.position, item.position) > 3 || world.player.inventory.length >= 4) return world;
+  if (!item || distance(world.player.position, item.position) > 3.5 || world.player.inventory.length >= 4) return world;
+  if (item.kind === 'component' && !world.componentExposed) return world;
   const player = { ...world.player, inventory: [...world.player.inventory, { ...item, available: false }] };
   const items = world.items.map(candidate => candidate.id === item.id ? { ...candidate, available: false } : candidate);
   let creatures = world.creatures;
   if (item.kind === 'egg' && item.ownerSpecies) {
     creatures = world.creatures.map(creature => {
-      if (creature.speciesId !== item.ownerSpecies || distance(creature.position, world.player.position) > 24) return creature;
+      if (creature.speciesId !== item.ownerSpecies || !witnessesTheft(creature, world)) return creature;
       const remembered = applyMemoryEvent(creature, { id: `${item.id}:${creature.id}:stolen`, type: 'egg_stolen',
         creatureId: creature.id, otherId: 'player', at: world.time, position: world.player.position });
       return { ...remembered, currentIntent: null, decisionEpoch: remembered.decisionEpoch + 1, nextDecisionAt: world.time };
     });
   }
-  return { ...world, player, items, creatures };
+  const componentExposed = world.componentExposed || (item.kind === 'egg' && world.nests.some(nest =>
+    nest.speciesId === item.ownerSpecies && distance(item.position, nest.position) <= 6));
+  return { ...world, player, items, creatures, componentExposed };
 }
 
 export function dropItem(world: WorldState, itemId: string): WorldState {
@@ -37,17 +58,19 @@ export function dropItem(world: WorldState, itemId: string): WorldState {
   const items = world.items.map(candidate => candidate.id === itemId
     ? { ...candidate, available: true, position: { ...world.player.position } } : candidate);
   const creatures = item.kind === 'egg' ? world.creatures.map(creature => creature.speciesId === item.ownerSpecies &&
-    distance(creature.position, world.player.position) <= 24
+    (creature.currentIntent?.action === 'DEFEND' || distance(creature.position, world.player.position) <= 24)
     ? { ...creature, currentIntent: null, decisionEpoch: creature.decisionEpoch + 1, nextDecisionAt: world.time } : creature) : world.creatures;
   return { ...world, player, items, creatures };
 }
 
 export function useItem(world: WorldState, itemId: string): WorldState {
   const item = world.player.inventory.find(candidate => candidate.id === itemId);
-  if (!item || item.kind !== 'egg') return world;
+  if (!item || (item.kind !== 'egg' && item.kind !== 'spore')) return world;
   return { ...world, player: { ...world.player,
     inventory: world.player.inventory.filter(candidate => candidate.id !== itemId),
-    food: clamp(world.player.food + .55), health: clamp(world.player.health + .2), air: clamp(world.player.air + .08) } };
+    food: clamp(world.player.food + (item.kind === 'egg' ? .55 : .35)),
+    health: clamp(world.player.health + (item.kind === 'egg' ? .2 : .07)),
+    air: clamp(world.player.air + (item.kind === 'egg' ? .08 : 0)) } };
 }
 
 export function repairShip(world: WorldState): WorldState {
@@ -63,5 +86,8 @@ export function recoverAtShip(world: WorldState): WorldState {
   return { ...world,
     player: { ...world.player, position: { ...world.shipPosition }, inventory: [], air: .65, power: .6, health: .45 },
     items: world.items.map(item => carried.has(item.id)
-      ? { ...item, available: true, position: { ...world.player.position } } : item) };
+      ? { ...item, available: true, position: { ...world.player.position } } : item),
+    creatures: world.creatures.map(creature => creature.currentIntent?.targetId === 'player'
+      ? { ...creature, currentIntent: null, decisionEpoch: creature.decisionEpoch + 1, nextDecisionAt: world.time }
+      : creature) };
 }

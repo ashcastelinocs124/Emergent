@@ -14,6 +14,7 @@ export function getValidIntents(creature: CreatureState, world: WorldState): Int
   if (!creature.alive) return [];
   const intents: Intent[] = [];
   const playerDistance = distance(creature.position, world.player.position);
+  const playerDetected = !world.player.hidden || playerDistance <= 6;
 
   if (creature.speciesId === 'guardian') {
     const nest = world.nests.find(candidate => candidate.speciesId === 'guardian' &&
@@ -21,14 +22,14 @@ export function getValidIntents(creature: CreatureState, world: WorldState): Int
     const playerInTerritory = nest && distance(world.player.position, nest.position) <= nest.radius;
     const carryingGuardianEgg = world.player.inventory.some(item =>
       item.kind === 'egg' && item.ownerSpecies === 'guardian');
-    if (playerInTerritory && playerDistance <= 24 && carryingGuardianEgg) {
+    if (playerInTerritory && playerDistance <= 24 && carryingGuardianEgg && playerDetected) {
       if (creature.health < .25) intents.push({ action: 'FLEE', targetId: 'player' });
       intents.push({ action: 'DEFEND', targetId: 'player' }, { action: 'FOLLOW', targetId: 'player' });
       return intents;
     }
     const remembersTheft = creature.memory.events.some(event =>
       event.type === 'egg_stolen' && event.otherId === 'player');
-    if (playerDistance <= 24 && remembersTheft) {
+    if (playerDistance <= 24 && remembersTheft && playerDetected) {
       intents.push({ action: 'FOLLOW', targetId: 'player' });
       if (creature.fear > .5) intents.push({ action: 'HIDE' });
     }

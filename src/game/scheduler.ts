@@ -8,16 +8,23 @@ export interface DecisionScheduler {
   takeError(creatureId: string): Error | null;
 }
 
-export function createDecisionScheduler(send: (input: DecisionInput) => Promise<DecisionResult>): DecisionScheduler {
+export function createDecisionScheduler(send: (input: DecisionInput) => Promise<DecisionResult>, timeoutMs = 4000): DecisionScheduler {
   const pending = new Map<string, number>();
+  const deadlines = new Map<string, ReturnType<typeof setTimeout>>();
   const expected = new Map<string, number>();
   const ready = new Map<string, DecisionResult>();
   const errors = new Map<string, Error>();
+  const clearPending = (creatureId: string): void => {
+    pending.delete(creatureId);
+    const deadline = deadlines.get(creatureId);
+    if (deadline) clearTimeout(deadline);
+    deadlines.delete(creatureId);
+  };
 
   const accept = (result: DecisionResult): void => {
     const pendingEpoch = pending.get(result.creatureId);
     if (pendingEpoch === undefined) return;
-    pending.delete(result.creatureId);
+    clearPending(result.creatureId);
     if (pendingEpoch !== result.epoch) {
       errors.set(result.creatureId, new Error('Jev response epoch mismatch'));
       return;
@@ -33,23 +40,31 @@ export function createDecisionScheduler(send: (input: DecisionInput) => Promise<
       expected.set(input.creatureId, input.epoch);
       ready.delete(input.creatureId);
       errors.delete(input.creatureId);
+      deadlines.set(input.creatureId, setTimeout(() => {
+        if (pending.get(input.creatureId) !== input.epoch) return;
+        clearPending(input.creatureId);
+        if (expected.get(input.creatureId) === input.epoch)
+          errors.set(input.creatureId, new Error('Jev decision timed out'));
+      }, timeoutMs));
       try {
         void send(input).then(accept, error => {
           if (pending.get(input.creatureId) !== input.epoch) return;
-          pending.delete(input.creatureId);
+          clearPending(input.creatureId);
           if (expected.get(input.creatureId) === input.epoch) {
             errors.set(input.creatureId, error instanceof Error ? error : new Error(String(error)));
           }
         });
       } catch (error) {
-        pending.delete(input.creatureId);
+        clearPending(input.creatureId);
         errors.set(input.creatureId, error instanceof Error ? error : new Error(String(error)));
       }
       return true;
     },
     invalidate(creatureId, epoch) {
       expected.set(creatureId, epoch);
+      clearPending(creatureId);
       ready.delete(creatureId);
+      errors.delete(creatureId);
     },
     accept,
     takeReady(creatureId) {

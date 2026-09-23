@@ -19,6 +19,17 @@ describe('discoverable species rules', () => {
     expect(getValidIntents(guardian, scene).every(intent => ['DEFEND', 'FOLLOW', 'FLEE'].includes(intent.action))).toBe(true);
   });
 
+  test('crouching out of detection range removes guardian defense until close', () => {
+    const guardian = creature('g1', 'guardian', at(0, 0));
+    const scene = world([guardian]);
+    scene.player.position = at(12, 0);
+    scene.player.hidden = true;
+    scene.player.inventory.push({ id: 'egg-1', kind: 'egg', position: at(0, 0), ownerSpecies: 'guardian', available: false });
+    expect(getValidIntents(guardian, scene)).not.toContainEqual({ action: 'DEFEND', targetId: 'player' });
+    scene.player.position = at(3, 0);
+    expect(getValidIntents(guardian, scene)).toContainEqual({ action: 'DEFEND', targetId: 'player' });
+  });
+
   test('a previously robbed guardian recognizes the player without attacking', () => {
     const guardian = creature('g1', 'guardian');
     guardian.memory.events.push({ id: 'theft-1', type: 'egg_stolen', otherId: 'player', at: 5 });

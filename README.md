@@ -17,9 +17,9 @@ For a deterministic, visibly labelled development simulation, run `npm run dev:s
 
 ## Controls
 
-WASD move; mouse look; Shift crouch; E interact; R drop held item; F eat a held egg; Q toggle scanner; J open the field journal; Esc release the cursor. At the ship, the journal pauses time. In the field, creatures keep moving while it is open.
+WASD move; mouse look; Shift crouch; E interact; R drop held item; F eat a held egg or spore; Q toggle scanner; J open the field journal; Esc release the cursor. At the ship, the journal pauses time. In the field, creatures keep moving while it is open.
 
-The helmet visor shows air, power, health, a drive/ship signal bearing, inventory, and prompts. Air and power refill near the ship. If the suit fails, emergency recovery returns the explorer to shelter and leaves carried items at the failure site.
+The helmet visor shows air, power, health, a drive/ship signal bearing, inventory, and prompts. The drive regulator is pinned under the guardian clutch; moving an egg exposes it. Air and power refill near the ship. If the suit fails, emergency recovery returns the explorer to shelter and leaves carried items at the failure site.
 
 ## Scope and current limits
 

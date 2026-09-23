@@ -18,7 +18,7 @@ export function createItemViews(scene: THREE.Scene, items: ItemState[]): { sync(
     mesh.scale.set(item.kind === 'egg' ? .75 : 1, item.kind === 'egg' ? 1.45 : 1, item.kind === 'egg' ? .78 : 1);
     mesh.castShadow = true;
     mesh.position.set(item.position.x, terrainHeight(item.position.x, item.position.z) + (item.kind === 'component' ? 1.65 : item.kind === 'spore' ? .35 : 1.05), item.position.z);
-    mesh.visible = item.available;
+    mesh.visible = item.available && item.kind !== 'component';
     mesh.name = item.id;
     views.set(item.id, mesh);
     scene.add(mesh);
@@ -28,7 +28,7 @@ export function createItemViews(scene: THREE.Scene, items: ItemState[]): { sync(
       for (const item of world.items) {
         const mesh = views.get(item.id);
         if (!mesh) continue;
-        mesh.visible = item.available;
+        mesh.visible = item.available && (item.kind !== 'component' || world.componentExposed);
         mesh.position.x = item.position.x;
         mesh.position.z = item.position.z;
         mesh.position.y = terrainHeight(item.position.x, item.position.z) + (item.kind === 'component' ? 1.65 : item.kind === 'spore' ? .35 : 1.05);

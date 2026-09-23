@@ -29,5 +29,9 @@ export function loadSave(raw: string): { world: WorldState; journal: Journal } {
     point(creature.position) && record(creature.memory) && Array.isArray(creature.memory.events) &&
     typeof creature.decisionEpoch === 'number')) throw damaged();
   if (!world.items.every(item => record(item) && typeof item.id === 'string' && point(item.position))) throw damaged();
-  return { world: world as unknown as WorldState, journal: journal as unknown as Journal };
+  const restored = { ...world,
+    componentExposed: typeof world.componentExposed === 'boolean' ? world.componentExposed : false,
+    creatures: world.creatures.map(creature => ({ ...creature,
+      facing: point(creature.facing) ? creature.facing : { x: 0, y: 0, z: 1 } })) };
+  return { world: restored as unknown as WorldState, journal: journal as unknown as Journal };
 }

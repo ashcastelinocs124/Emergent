@@ -4,7 +4,7 @@ export const at = (x: number, z: number): Vec3 => ({ x, y: 0, z });
 
 export function creature(id: string, speciesId: SpeciesId, position = at(0, 0)): CreatureState {
   return {
-    id, speciesId, position, alive: true, health: 1, hunger: .5, fear: 0,
+    id, speciesId, position, facing: at(0, 1), alive: true, health: 1, hunger: .5, fear: 0,
     mateDrive: 0, memory: { events: [], disposition: 0 }, currentIntent: null,
     actionEndsAt: 0, nextDecisionAt: 0, decisionEpoch: 0,
   };
@@ -21,6 +21,7 @@ export function world(creatures: CreatureState[]): WorldState {
     items: [],
     nests: [{ id: 'nest-1', speciesId: 'guardian', position: at(0, 0), radius: 16 }],
     shipPosition: at(-20, 10),
+    componentExposed: false,
     componentInstalled: false,
   };
 }

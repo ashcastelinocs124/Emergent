@@ -6,7 +6,7 @@ import { createDecisionScheduler } from './game/scheduler';
 import { createCreatureViews } from './game/creatures';
 import { playCreatureCue, playSuitAlert, setAudioListener, unlockAudio } from './game/audio';
 import { getValidIntents } from './shared/species';
-import { tickSuit, interact, dropItem, useItem, repairShip, recoverAtShip } from './shared/survival';
+import { tickSuit, interact, dropItem, useItem, repairShip, recoverAtShip, witnessesTheft } from './shared/survival';
 import { createVisor, setDecisionConnection } from './ui/visor';
 import { creatureVisibility, findInteractionTarget } from './game/player';
 import { createItemViews } from './game/items';
@@ -107,6 +107,7 @@ try {
   window.addEventListener('keydown', event => {
     if (event.repeat) return;
     if (ended) return;
+    if (connection === 'paused') return;
     if (event.code === 'KeyJ' && !(event.target instanceof HTMLInputElement)) {
       journalUI.toggle();
       return;
@@ -123,34 +124,47 @@ try {
         else if (world.componentInstalled) showEnding();
         else visor.message('DRIVE REGULATOR REQUIRED');
       } else {
+        const item = world.items.find(candidate => candidate.id === target!.id);
+        const witnesses = item?.kind === 'egg' ? new Set(world.creatures.filter(creature =>
+          creature.speciesId === 'guardian' && witnessesTheft(creature, world)).map(creature => creature.id)) : new Set<string>();
+        const before = world;
         const picked = interact(world, target.id);
         if (picked !== world) {
-          const item = world.items.find(candidate => candidate.id === target!.id);
           world = picked;
+          for (const creature of world.creatures) {
+            if (creature.decisionEpoch !== before.creatures.find(candidate => candidate.id === creature.id)?.decisionEpoch)
+              scheduler.invalidate(creature.id, creature.decisionEpoch);
+          }
           visor.message(item?.kind === 'egg' ? 'EGG COLLECTED · MOVEMENT DETECTED' : `${item?.kind.toUpperCase()} SECURED`);
           if (item?.kind === 'egg') for (const creature of world.creatures) {
-            if (creature.speciesId !== 'guardian') continue;
-            const visibility = creatureVisibility(camera, creature.position);
+            if (!witnesses.has(creature.id)) continue;
+            const visibility = creatureVisibility(camera, creature.position, habitat.occluders);
             if (!world.player.scannerOn && visibility.distance > 22) continue;
             journal = recordObservation(journal, { id: `egg-${item.id}-${creature.id}`, at: world.time,
               creatureId: creature.id, speciesId: creature.speciesId, action: 'EGG_PICKUP',
               position: { ...creature.position }, carriedItem: 'egg', note: 'Egg taken while this individual was in view.' }, visibility);
           }
           if (item?.kind === 'egg') for (const creature of world.creatures) {
-            if (creature.speciesId === 'guardian' && creature.memory.events.some(fact => fact.type === 'egg_stolen'))
+            if (witnesses.has(creature.id))
               playCreatureCue(creature.id, 'guardian-warning', creature.position);
           }
-        }
+        } else if (item?.kind === 'component' && !world.componentExposed)
+          visor.message('REGULATOR PINNED UNDER THE CLUTCH');
       }
     }
     if (event.code === 'KeyR' && world.player.inventory.length) {
       const item = world.player.inventory.at(-1)!;
+      const before = world;
       world = dropItem(world, item.id);
+      for (const creature of world.creatures) {
+        if (creature.decisionEpoch !== before.creatures.find(candidate => candidate.id === creature.id)?.decisionEpoch)
+          scheduler.invalidate(creature.id, creature.decisionEpoch);
+      }
       visor.message(`${item.kind.toUpperCase()} DROPPED`);
     }
     if (event.code === 'KeyF') {
-      const egg = world.player.inventory.find(item => item.kind === 'egg');
-      if (egg) { world = useItem(world, egg.id); visor.message('NUTRIENTS RESTORED'); }
+      const food = world.player.inventory.find(item => item.kind === 'egg' || item.kind === 'spore');
+      if (food) { world = useItem(world, food.id); visor.message('NUTRIENTS RESTORED'); }
     }
   });
   let decisionCount = 0;
@@ -164,9 +178,14 @@ try {
   const setConnection = (status: typeof connection) => { connection = status; setDecisionConnection(status); };
   let wasSheltered = true;
   const scheduler = createDecisionScheduler(async (input: DecisionInput): Promise<DecisionResult> => {
-    const response = await fetch('/api/decision', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
-    if (!response.ok) throw new Error(`Decision service: ${response.status}`);
-    return response.json() as Promise<DecisionResult>;
+    const controller = new AbortController();
+    const deadline = setTimeout(() => controller.abort(), 3500);
+    try {
+      const response = await fetch('/api/decision', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input), signal: controller.signal });
+      if (!response.ok) throw new Error(`Decision service: ${response.status}`);
+      return response.json() as Promise<DecisionResult>;
+    } finally { clearTimeout(deadline); }
   });
   document.querySelector<HTMLButtonElement>('#connection-retry')!.addEventListener('click', async () => {
     const button = document.querySelector<HTMLButtonElement>('#connection-retry')!;
@@ -194,6 +213,7 @@ try {
   });
   const debugDisplay = debug ? document.createElement('pre') : null;
   if (debug) Object.assign(window, { __alienDebug: { camera, scene, renderer, getWorld: () => world,
+    getTarget: () => target,
     teleport: (x: number, z: number, lookX: number, lookZ: number) => controls.teleport(x, z,
       new THREE.Vector3(lookX, habitat.heightAt(lookX, lookZ) + 1, lookZ)) } });
   if (debugDisplay) {
@@ -228,7 +248,7 @@ try {
   renderer.setAnimationLoop(() => {
     const now = performance.now();
     const frameDt = Math.min((now - previousFrame) / 1000, .1);
-    if (!journalUI.isOpen() && !ended) {
+    if (!journalUI.isOpen() && !ended && connection !== 'paused') {
       controls.update(frameDt);
       for (const creature of world.creatures) {
         if (!creature.alive) continue;
@@ -259,7 +279,12 @@ try {
       wasSheltered = sheltered;
       playSuitAlert(world.player.air);
       if (world.player.health <= 0) {
+        const before = world;
         world = recoverAtShip(world);
+        for (const creature of world.creatures) {
+          if (creature.decisionEpoch !== before.creatures.find(candidate => candidate.id === creature.id)?.decisionEpoch)
+            scheduler.invalidate(creature.id, creature.decisionEpoch);
+        }
         camera.position.set(world.shipPosition.x + 2, habitat.heightAt(world.shipPosition.x + 2, world.shipPosition.z + 5) + 1.75, world.shipPosition.z + 5);
         visor.message('SUIT FAILURE · EMERGENCY RETURN TO SHIP', 5000);
       }
@@ -315,7 +340,7 @@ try {
         nextObservationAt = world.time + .5;
         for (const creature of world.creatures) {
           if (!creature.alive || !creature.currentIntent) continue;
-          const visibility = creatureVisibility(camera, creature.position);
+          const visibility = creatureVisibility(camera, creature.position, habitat.occluders);
           if (!world.player.scannerOn && visibility.distance > 22) continue;
           const updated = recordObservation(journal, { id: `sighting-${creature.id}-${creature.decisionEpoch}`,
             at: world.time, creatureId: creature.id, speciesId: creature.speciesId,

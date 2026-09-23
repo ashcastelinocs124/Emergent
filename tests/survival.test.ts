@@ -49,6 +49,40 @@ describe('expedition survival', () => {
     expect(used.player.inventory).toHaveLength(0);
   });
 
+  test('spores offer another food source without carrying guardian eggs', () => {
+    const scene = world([]);
+    scene.player.food = .2;
+    scene.player.inventory.push({ id: 'spore-1', kind: 'spore', position: at(0, 0), available: false });
+    const used = useItem(scene, 'spore-1');
+    expect(used.player.food).toBeGreaterThan(.2);
+    expect(used.player.inventory).toHaveLength(0);
+  });
+
+  test('regulator is pinned under the clutch until an egg is moved', () => {
+    const scene = world([]);
+    scene.player.position = at(0, 0);
+    scene.items.push({ id: 'ship-component', kind: 'component', position: at(1, 0), available: true });
+    scene.items.push({ id: 'egg-1', kind: 'egg', ownerSpecies: 'guardian', position: at(1, 1), available: true });
+    expect(interact(scene, 'ship-component')).toBe(scene);
+    const disturbed = interact(scene, 'egg-1');
+    expect(disturbed.componentExposed).toBe(true);
+    const calm = dropItem(disturbed, 'egg-1');
+    expect(interact(calm, 'ship-component').player.inventory.some(item => item.kind === 'component')).toBe(true);
+  });
+
+  test('only a nearby attentive guardian remembers a witnessed egg theft', () => {
+    const witness = creature('witness', 'guardian', at(2, 0));
+    witness.facing = at(-1, 0);
+    const away = creature('away', 'guardian', at(2, 1));
+    away.facing = at(1, 0);
+    const scene = world([witness, away]);
+    scene.player.position = at(0, 0);
+    scene.items.push({ id: 'egg-1', kind: 'egg', ownerSpecies: 'guardian', position: at(1, 0), available: true });
+    const after = interact(scene, 'egg-1');
+    expect(after.creatures[0].memory.events.some(fact => fact.type === 'egg_stolen')).toBe(true);
+    expect(after.creatures[1].memory.events).toHaveLength(0);
+  });
+
   test('repair requires the recovered component and proximity to ship', () => {
     const scene = world([]);
     expect(repairShip(scene)).toBe(scene);

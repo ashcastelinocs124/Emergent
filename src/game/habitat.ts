@@ -1,10 +1,13 @@
 import * as THREE from 'three';
+import { terrainHeight } from '../shared/terrain';
+export { terrainHeight } from '../shared/terrain';
 
 export interface Habitat {
   heightAt(x: number, z: number): number;
   shipPosition: THREE.Vector3;
   nestPosition: THREE.Vector3;
   componentPosition: THREE.Vector3;
+  occluders: THREE.Object3D[];
 }
 
 const WORLD_RADIUS = 150;
@@ -31,13 +34,6 @@ function groundTexture(): THREE.CanvasTexture {
   texture.repeat.set(24, 24);
   texture.anisotropy = 4;
   return texture;
-}
-
-export function terrainHeight(x: number, z: number): number {
-  const ridges = Math.sin(x * 0.024) * Math.cos(z * 0.019) * 4.2;
-  const detail = Math.sin(x * 0.071 + z * 0.045) * Math.cos(z * 0.084) * 1.15;
-  const basin = -3.8 * Math.exp(-((x + 12) ** 2 + (z - 14) ** 2) / 2600);
-  return ridges + detail + basin;
 }
 
 export function createHabitat(scene: THREE.Scene): Habitat {
@@ -169,7 +165,8 @@ export function createHabitat(scene: THREE.Scene): Habitat {
   nestLight.position.copy(nestPosition).add(new THREE.Vector3(0, 3.5, 0));
   scene.add(nestLight);
 
-  const componentPosition = new THREE.Vector3(76, terrainHeight(76, -29), -29);
+  const componentPosition = new THREE.Vector3(nestPosition.x + 2.7,
+    terrainHeight(nestPosition.x + 2.7, nestPosition.z + .5), nestPosition.z + .5);
   const wreck = new THREE.Mesh(new THREE.BoxGeometry(4, 1.3, 3), new THREE.MeshStandardMaterial({ color: 0x66756c, metalness: .38, roughness: .62 }));
   wreck.position.copy(componentPosition).add(new THREE.Vector3(0, .5, 0));
   wreck.rotation.y = .63;
@@ -178,5 +175,6 @@ export function createHabitat(scene: THREE.Scene): Habitat {
   const wreckBeacon = new THREE.PointLight(0xe8aa61, 5, 13, 2);
   wreckBeacon.position.copy(componentPosition).add(new THREE.Vector3(1.2, 2.5, .6));
   scene.add(wreckBeacon);
-  return { heightAt: terrainHeight, shipPosition, nestPosition, componentPosition };
+  return { heightAt: terrainHeight, shipPosition, nestPosition, componentPosition,
+    occluders: [boulders, hull, wreck, consolePedestal] };
 }

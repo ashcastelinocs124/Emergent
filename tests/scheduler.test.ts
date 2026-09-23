@@ -37,4 +37,15 @@ describe('creature decision scheduler', () => {
     expect(scheduler.takeReady('g1')).toBeNull();
     expect(scheduler.takeError('g1')?.message).toBe('service offline');
   });
+
+  test('a request that never responds times out and ignores its late reply', async () => {
+    let resolveLate!: (result: DecisionResult) => void;
+    const scheduler = createDecisionScheduler(() => new Promise(resolve => { resolveLate = resolve; }), 5);
+    scheduler.issue(input);
+    await new Promise(resolve => setTimeout(resolve, 25));
+    expect(scheduler.takeError('g1')?.message).toMatch(/timed out/i);
+    resolveLate({ creatureId: 'g1', epoch: 4, intent: intents[0] });
+    await Promise.resolve();
+    expect(scheduler.takeReady('g1')).toBeNull();
+  });
 });
