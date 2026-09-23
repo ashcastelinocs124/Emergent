@@ -53,7 +53,10 @@ export function createApp(decide: (input: DecisionInput) => Promise<DecisionResu
         return;
       }
       response.json(result);
-    } catch {
+    } catch (error) {
+      const failure = error as { name?: string; status?: number; code?: string };
+      console.warn('Jev decision failed', { name: failure?.name ?? 'UnknownError',
+        status: failure?.status, code: failure?.code });
       response.status(503).json({ error: 'Decision service unavailable' });
     }
   });

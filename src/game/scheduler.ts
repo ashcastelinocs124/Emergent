@@ -8,7 +8,7 @@ export interface DecisionScheduler {
   takeError(creatureId: string): Error | null;
 }
 
-export function createDecisionScheduler(send: (input: DecisionInput) => Promise<DecisionResult>, timeoutMs = 4000): DecisionScheduler {
+export function createDecisionScheduler(send: (input: DecisionInput) => Promise<DecisionResult>, timeoutMs = 6000): DecisionScheduler {
   const pending = new Map<string, { epoch: number }>();
   const deadlines = new Map<string, ReturnType<typeof setTimeout>>();
   const expected = new Map<string, number>();

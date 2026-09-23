@@ -185,7 +185,7 @@ try {
   let wasSheltered = true;
   const scheduler = createDecisionScheduler(async (input: DecisionInput): Promise<DecisionResult> => {
     const controller = new AbortController();
-    const deadline = setTimeout(() => controller.abort(), 3500);
+    const deadline = setTimeout(() => controller.abort(), 5500);
     try {
       const response = await fetch('/api/decision', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input), signal: controller.signal });

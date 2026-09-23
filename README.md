@@ -23,4 +23,4 @@ The helmet visor shows air, power, health, a drive/ship signal bearing, inventor
 
 ## Scope and current limits
 
-This is one habitat, one repair objective, three species, and 20–40 creatures (30 by default). The [design](docs/superpowers/specs/2026-09-23-alien-ecosystem-design.md), [playtest notes](docs/playtest.md), [performance notes](docs/performance.md), and [Jev measurements](docs/jev-measurements.md) document what is implemented and what still needs live or human validation. Live Jev scaling and a blind discovery test have not been run in this workspace.
+This is one habitat, one repair objective, three species, and 20–40 creatures (30 by default). The [design](docs/superpowers/specs/2026-09-23-alien-ecosystem-design.md), [playtest notes](docs/playtest.md), [performance notes](docs/performance.md), and [Jev measurements](docs/jev-measurements.md) document what is implemented and what still needs validation. Live ten-minute sessions at 20 and 40 creatures are measured, including intermittent timeouts at 40; a blind discovery test has not yet been run.

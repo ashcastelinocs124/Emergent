@@ -22,12 +22,14 @@ function describeIntent(intent: Intent): string {
 
 export function createLiveEvaluator(apiKey: string | undefined): JevEvaluator {
   if (!apiKey?.trim()) throw new Error('TYPESAFE_API_KEY is required for live Jev decisions');
-  const client = new TypeSafeClient({ apiKey, timeout: 3000, retry: { maxRetries: 0 }, logLevel: 'error' });
+  const client = new TypeSafeClient({ apiKey, timeout: 4500, retry: { maxRetries: 0 }, logLevel: 'error' });
   return async request => client.systemOne({
     state: request.state as Record<string, JsonValue>,
     questions: { intent: choice(request.questions.intent.instructions, request.questions.intent.criteria) },
   });
 }
+
+let sharedLiveEvaluator: JevEvaluator | undefined;
 
 function buildRequest(input: DecisionInput): JevRequest {
   const creature = input.world.creatures.find(candidate => candidate.id === input.creatureId);
@@ -67,8 +69,8 @@ function buildRequest(input: DecisionInput): JevRequest {
 
 export async function requestDecision(
   input: DecisionInput,
-  evaluate: JevEvaluator = createLiveEvaluator(process.env.TYPESAFE_API_KEY),
-  timeoutMs = 3500,
+  evaluate: JevEvaluator = sharedLiveEvaluator ??= createLiveEvaluator(process.env.TYPESAFE_API_KEY),
+  timeoutMs = 5000,
 ): Promise<DecisionResult> {
   if (input.intents.length < 1 || input.intents.length > 255) throw new Error('Invalid intent count');
   const request = buildRequest(input);
