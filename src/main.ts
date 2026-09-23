@@ -3,6 +3,8 @@ import { createHabitat } from './game/habitat';
 import { createControls } from './game/controls';
 import { createInitialWorld, applyDecision, stepWorld } from './game/world';
 import { createDecisionScheduler } from './game/scheduler';
+import { createCreatureViews } from './game/creatures';
+import { playCreatureCue, setAudioListener, unlockAudio } from './game/audio';
 import { getValidIntents } from './shared/species';
 import type { DecisionInput, DecisionResult } from './shared/model';
 import './style.css';
@@ -32,7 +34,9 @@ try {
   mount.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x819ca1);
+  const daySky = new THREE.Color(0x819ca1);
+  const duskSky = new THREE.Color(0x323c5d);
+  scene.background = daySky.clone();
   scene.fog = new THREE.FogExp2(0x819ca1, .008);
   const sun = new THREE.DirectionalLight(0xffe3b8, 2.6);
   sun.position.set(-40, 80, -30);
@@ -48,7 +52,11 @@ try {
   const camera = new THREE.PerspectiveCamera(76, window.innerWidth / window.innerHeight, .1, 500);
   camera.position.copy(habitat.shipPosition).add(new THREE.Vector3(-8, 1.75, 10));
   const controls = createControls(camera, renderer.domElement, habitat.heightAt);
-  let world = createInitialWorld(42, habitat.shipPosition, habitat.nestPosition);
+  const query = new URLSearchParams(window.location.search);
+  const debug = query.has('debug');
+  const creatureCount = debug ? Math.max(20, Math.min(40, Number(query.get('creatures')) || 30)) : 30;
+  let world = createInitialWorld(42, habitat.shipPosition, habitat.nestPosition, creatureCount);
+  const creatureViews = createCreatureViews(scene, world.creatures);
   let decisionCount = 0;
   let decisionErrors = 0;
   const scheduler = createDecisionScheduler(async (input: DecisionInput): Promise<DecisionResult> => {
@@ -56,14 +64,15 @@ try {
     if (!response.ok) throw new Error(`Decision service: ${response.status}`);
     return response.json() as Promise<DecisionResult>;
   });
-  const debug = new URLSearchParams(window.location.search).has('debug');
   const debugDisplay = debug ? document.createElement('pre') : null;
+  if (debug) Object.assign(window, { __alienDebug: { camera, scene, renderer, getWorld: () => world } });
   if (debugDisplay) {
     debugDisplay.id = 'debug-state';
     debugDisplay.style.cssText = 'position:fixed;right:12px;top:12px;z-index:30;color:#d7fbe8;background:#071918dc;padding:12px;font:12px/1.5 monospace;pointer-events:none';
     document.body.appendChild(debugDisplay);
   }
   enter.addEventListener('click', async () => {
+    unlockAudio();
     try {
       await renderer.domElement.requestPointerLock();
     } catch {
@@ -91,10 +100,19 @@ try {
     controls.update(frameDt);
     previousFrame = now;
     world.player.position = { x: controls.position.x, y: controls.position.y, z: controls.position.z };
+    setAudioListener(world.player.position);
     world.player.hidden = controls.isHidden;
     accumulator += frameDt;
     while (accumulator >= fixedStep) {
-      world = stepWorld(world, fixedStep).world;
+      const stepped = stepWorld(world, fixedStep);
+      world = stepped.world;
+      for (const event of stepped.events) {
+        if (event.type === 'attacked') {
+          const species = world.creatures.find(creature => creature.id === event.creatureId)?.speciesId;
+          if (species === 'guardian') playCreatureCue(event.creatureId, 'guardian-warning', event.position ?? world.player.position);
+          else if (species === 'stalker') playCreatureCue(event.creatureId, 'stalker-hunt', event.position ?? world.player.position);
+        }
+      }
       accumulator -= fixedStep;
       for (const creature of world.creatures) {
         const result = scheduler.takeReady(creature.id);
@@ -115,8 +133,13 @@ try {
     }
     if (debugDisplay) {
       const active = world.creatures.filter(creature => creature.currentIntent);
-      debugDisplay.textContent = `SIM ${world.time.toFixed(1)}s\nACTIVE ${active.length}/30\nJEV DECISIONS ${decisionCount}\nERRORS ${decisionErrors}\n${active.slice(0, 12).map(creature => `${creature.id}: ${creature.currentIntent?.action}`).join('\n')}`;
+      debugDisplay.textContent = `SIM ${world.time.toFixed(1)}s\nACTIVE ${active.length}/${world.creatures.length}\nJEV DECISIONS ${decisionCount}\nERRORS ${decisionErrors}\n${active.slice(0, 12).map(creature => `${creature.id}: ${creature.currentIntent?.action}`).join('\n')}`;
     }
+    const dusk = Math.max(0, Math.min(1, (world.time - 240) / 120));
+    (scene.background as THREE.Color).copy(daySky).lerp(duskSky, dusk);
+    if (scene.fog instanceof THREE.FogExp2) scene.fog.color.copy(scene.background as THREE.Color);
+    sun.intensity = 2.6 - dusk * 1.5;
+    creatureViews.sync(world, accumulator / fixedStep);
     renderer.render(scene, camera);
   });
 } catch (error) {

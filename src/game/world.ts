@@ -138,11 +138,11 @@ function random(seed: number): () => number {
   return () => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 4294967296; };
 }
 
-export function createInitialWorld(seed: number, shipPosition: Vec3, nestPosition: Vec3): WorldState {
+export function createInitialWorld(seed: number, shipPosition: Vec3, nestPosition: Vec3, creatureCount = 30): WorldState {
   const rng = random(seed);
   const creatures: CreatureState[] = [];
   const species = ['guardian', 'grazer', 'stalker'] as const;
-  for (const kind of species) for (let i = 0; i < 10; i++) {
+  for (const kind of species) for (let i = 0; i < (Math.floor(creatureCount / 3) + (species.indexOf(kind) < creatureCount % 3 ? 1 : 0)); i++) {
     let position: Vec3;
     do {
       const center = kind === 'guardian' ? nestPosition : kind === 'grazer' ? { x: 5, y: 0, z: -28 } : { x: 42, y: 0, z: -12 };
