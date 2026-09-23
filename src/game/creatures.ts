@@ -113,7 +113,7 @@ export function createCreatureViews(scene: THREE.Scene, creatures: CreatureState
         group.position.y += moving ? Math.abs(Math.sin(world.time * (creature.speciesId === 'guardian' ? 5 : 9))) * .12 : Math.sin(world.time * 1.5 + creature.id.length) * .025;
         group.rotation.z = creature.currentIntent?.action === 'DEFEND' ? Math.sin(world.time * 10) * .055 : 0;
         const separation = Math.hypot(group.position.x - world.player.position.x, group.position.z - world.player.position.z);
-        group.children.forEach(child => { if (child.userData.detail) child.visible = separation < 75; });
+        group.children.forEach(child => { if (child.userData.detail) child.visible = separation < 42; });
         previous.set(creature.id, next);
       }
     },

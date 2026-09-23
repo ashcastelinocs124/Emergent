@@ -5,6 +5,7 @@ import { requestDecision } from './jev';
 import { fakeDecision } from './fake-jev';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
 
 const ACTIONS = new Set(['HUNT', 'FLEE', 'HIDE', 'EAT', 'FOLLOW', 'DEFEND', 'MATE', 'EXPLORE']);
 
@@ -61,6 +62,7 @@ export function createApp(decide: (input: DecisionInput) => Promise<DecisionResu
 
 const isMain = process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url;
 if (isMain) {
+  if (existsSync('.env')) process.loadEnvFile('.env');
   const decide = process.env.JEV_MODE === 'fake' ? fakeDecision : requestDecision;
   createApp(decide).listen(8787, '127.0.0.1', () => {
     console.log(`Decision service listening on http://127.0.0.1:8787 (${process.env.JEV_MODE === 'fake' ? 'FAKE TEST MODE' : 'Jev'})`);

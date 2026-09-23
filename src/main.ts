@@ -13,6 +13,7 @@ import { createItemViews } from './game/items';
 import { emptyJournal, recordObservation } from './shared/journal';
 import { createJournalUI } from './ui/journal';
 import { createPersistence } from './game/persistence';
+import { createJevMetrics } from './game/metrics';
 import type { DecisionInput, DecisionResult } from './shared/model';
 import './style.css';
 
@@ -43,12 +44,23 @@ try {
   const scene = new THREE.Scene();
   const daySky = new THREE.Color(0x819ca1);
   const duskSky = new THREE.Color(0x323c5d);
+  const duskHorizon = new THREE.Color(0x77667d);
+  const duskZenith = new THREE.Color(0x101c40);
   scene.background = daySky.clone();
   scene.fog = new THREE.FogExp2(0x819ca1, .008);
+  const skyMaterial = new THREE.ShaderMaterial({
+    uniforms: { horizon: { value: new THREE.Color(0xa6b8b2) }, zenith: { value: new THREE.Color(0x425f70) } },
+    vertexShader: 'varying vec3 vPosition; void main(){vPosition=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
+    fragmentShader: 'uniform vec3 horizon;uniform vec3 zenith;varying vec3 vPosition;void main(){float t=smoothstep(-0.16,0.8,normalize(vPosition).y);gl_FragColor=vec4(mix(horizon,zenith,t),1.0);}',
+    side: THREE.BackSide, depthWrite: false,
+  });
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(420, 32, 20), skyMaterial);
+  sky.renderOrder = -100;
+  scene.add(sky);
   const sun = new THREE.DirectionalLight(0xffe3b8, 2.6);
   sun.position.set(-40, 80, -30);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(1024, 1024);
   sun.shadow.camera.left = -100;
   sun.shadow.camera.right = 100;
   sun.shadow.camera.top = 100;
@@ -80,9 +92,21 @@ try {
       if (open && document.pointerLockElement) document.exitPointerLock();
       entry.classList.toggle('hidden', open || document.pointerLockElement === renderer.domElement);
     });
+  let ended = false;
+  const showEnding = () => {
+    ended = true;
+    document.querySelector<HTMLElement>('#ending')!.hidden = false;
+    document.querySelector<HTMLElement>('#ending-record')!.textContent =
+      `${journal.observations.length} SIGHTINGS · ${journal.hypotheses.length} THEORIES · ${Math.round(world.time)}s SURFACE TIME`;
+    if (document.pointerLockElement) document.exitPointerLock();
+  };
+  document.querySelector<HTMLButtonElement>('#ending-restart')!.addEventListener('click', () => {
+    persistence.clear(); location.reload();
+  });
   let target = findInteractionTarget(world, camera);
   window.addEventListener('keydown', event => {
     if (event.repeat) return;
+    if (ended) return;
     if (event.code === 'KeyJ' && !(event.target instanceof HTMLInputElement)) {
       journalUI.toggle();
       return;
@@ -96,7 +120,7 @@ try {
       if (target.id === 'ship-console') {
         const repaired = repairShip(world);
         if (repaired !== world) { world = repaired; persistence.write(world, journal); visor.message('DRIVE REGULATOR INSTALLED'); }
-        else if (world.componentInstalled) visor.message('BOARDING SYSTEM READY');
+        else if (world.componentInstalled) showEnding();
         else visor.message('DRIVE REGULATOR REQUIRED');
       } else {
         const picked = interact(world, target.id);
@@ -131,6 +155,9 @@ try {
   });
   let decisionCount = 0;
   let decisionErrors = 0;
+  let discardedDecisions = 0;
+  const jevMetrics = createJevMetrics();
+  let lastMetricsLogAt = 0;
   let consecutiveErrors = 0;
   let firstErrorAt: number | null = null;
   let connection: 'ready' | 'waiting' | 'paused' = 'ready';
@@ -166,7 +193,9 @@ try {
     location.reload();
   });
   const debugDisplay = debug ? document.createElement('pre') : null;
-  if (debug) Object.assign(window, { __alienDebug: { camera, scene, renderer, getWorld: () => world } });
+  if (debug) Object.assign(window, { __alienDebug: { camera, scene, renderer, getWorld: () => world,
+    teleport: (x: number, z: number, lookX: number, lookZ: number) => controls.teleport(x, z,
+      new THREE.Vector3(lookX, habitat.heightAt(lookX, lookZ) + 1, lookZ)) } });
   if (debugDisplay) {
     debugDisplay.id = 'debug-state';
     debugDisplay.style.cssText = 'position:fixed;right:12px;top:12px;z-index:30;color:#d7fbe8;background:#071918dc;padding:12px;font:12px/1.5 monospace;pointer-events:none';
@@ -199,14 +228,29 @@ try {
   renderer.setAnimationLoop(() => {
     const now = performance.now();
     const frameDt = Math.min((now - previousFrame) / 1000, .1);
-    if (!journalUI.isOpen()) controls.update(frameDt);
+    if (!journalUI.isOpen() && !ended) {
+      controls.update(frameDt);
+      for (const creature of world.creatures) {
+        if (!creature.alive) continue;
+        const radius = creature.speciesId === 'guardian' ? 3.25 : 1.35;
+        const dx = camera.position.x - creature.position.x;
+        const dz = camera.position.z - creature.position.z;
+        const distance = Math.hypot(dx, dz);
+        if (distance < radius) {
+          const scale = radius / Math.max(distance, .001);
+          camera.position.x = creature.position.x + (distance < .001 ? radius : dx * scale);
+          camera.position.z = creature.position.z + dz * scale;
+          camera.position.y = habitat.heightAt(camera.position.x, camera.position.z) + (controls.isHidden ? 1.12 : 1.75);
+        }
+      }
+    }
     previousFrame = now;
     world.player.position = { x: controls.position.x, y: controls.position.y, z: controls.position.z };
     setAudioListener(world.player.position);
     world.player.hidden = controls.isHidden;
     const sheltered = Math.hypot(world.player.position.x - world.shipPosition.x,
       world.player.position.z - world.shipPosition.z) <= 10;
-    if (!(journalUI.isOpen() && sheltered) && connection !== 'paused') accumulator += frameDt;
+    if (!(journalUI.isOpen() && sheltered) && connection !== 'paused' && !ended) accumulator += frameDt;
     while (accumulator >= fixedStep) {
       const stepped = stepWorld(world, fixedStep);
       world = stepped.world;
@@ -232,9 +276,20 @@ try {
         if (result) {
           const applied = applyDecision(world, result);
           if (applied !== world) {
-            world = applied; decisionCount++; consecutiveErrors = 0; firstErrorAt = null;
+            world = applied; decisionCount++; jevMetrics.record(result, world.time);
+            const decided = world.creatures.find(candidate => candidate.id === result.creatureId);
+            if (decided) {
+              if (decided.speciesId === 'guardian' && result.intent.action === 'FOLLOW' &&
+                decided.memory.events.some(fact => fact.type === 'egg_stolen'))
+                playCreatureCue(decided.id, 'guardian-recognition', decided.position);
+              if (decided.speciesId === 'grazer' && result.intent.action === 'FLEE')
+                playCreatureCue(decided.id, 'grazer-alarm', decided.position);
+              if (decided.speciesId === 'stalker' && result.intent.action === 'HUNT')
+                playCreatureCue(decided.id, 'stalker-hunt', decided.position);
+            }
+            consecutiveErrors = 0; firstErrorAt = null;
             if (connection === 'waiting') setConnection('ready');
-          }
+          } else discardedDecisions++;
         }
         const error = scheduler.takeError(creature.id);
         if (error) {
@@ -270,14 +325,23 @@ try {
           if (updated !== journal) { journal = updated; if (journalUI.isOpen()) journalUI.render(); }
         }
       }
+      if (world.time - lastMetricsLogAt >= 60) {
+        lastMetricsLogAt = world.time;
+        console.info('Jev session metrics', { ...jevMetrics.summary(world.time),
+          rejectedOrStale: discardedDecisions, serviceErrors: decisionErrors });
+      }
     }
     if (debugDisplay) {
       const active = world.creatures.filter(creature => creature.currentIntent);
-      debugDisplay.textContent = `SIM ${world.time.toFixed(1)}s\nACTIVE ${active.length}/${world.creatures.length}\nJEV DECISIONS ${decisionCount}\nERRORS ${decisionErrors}\n${active.slice(0, 12).map(creature => `${creature.id}: ${creature.currentIntent?.action}`).join('\n')}`;
+      const metrics = jevMetrics.summary(world.time);
+      debugDisplay.textContent = `SIM ${world.time.toFixed(1)}s\nACTIVE ${active.length}/${world.creatures.length}\nJEV DECISIONS ${decisionCount} (${metrics.decisionsPerMinute}/MIN)\nP50/P95 ${metrics.p50Ms.toFixed(0)}/${metrics.p95Ms.toFixed(0)}ms\nTOKENS ${metrics.inputTokens}/${metrics.outputTokens}\nEST COST $${metrics.estimatedUsd.toFixed(5)}\nERRORS ${decisionErrors} · STALE ${discardedDecisions}\n${active.slice(0, 12).map(creature => `${creature.id}: ${creature.currentIntent?.action}`).join('\n')}`;
     }
     const dusk = Math.max(0, Math.min(1, (world.time - 240) / 120));
     (scene.background as THREE.Color).copy(daySky).lerp(duskSky, dusk);
     if (scene.fog instanceof THREE.FogExp2) scene.fog.color.copy(scene.background as THREE.Color);
+    sky.position.copy(camera.position);
+    (skyMaterial.uniforms.horizon.value as THREE.Color).set(0xa6b8b2).lerp(duskHorizon, dusk);
+    (skyMaterial.uniforms.zenith.value as THREE.Color).set(0x425f70).lerp(duskZenith, dusk);
     sun.intensity = 2.6 - dusk * 1.5;
     creatureViews.sync(world, accumulator / fixedStep);
     itemViews.sync(world);

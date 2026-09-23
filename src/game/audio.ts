@@ -4,12 +4,33 @@ export type CreatureCue = 'guardian-warning' | 'guardian-recognition' | 'grazer-
 let context: AudioContext | null = null;
 let listener: Vec3 = { x: 0, y: 0, z: 0 };
 const lastCue = new Map<string, number>();
+let ambientStarted = false;
 
 export function setAudioListener(position: Vec3): void { listener = position; }
 
 export function unlockAudio(): void {
   context ??= new AudioContext();
   void context.resume();
+  if (ambientStarted) return;
+  ambientStarted = true;
+  const length = context.sampleRate * 2;
+  const buffer = context.createBuffer(1, length, context.sampleRate);
+  const data = buffer.getChannelData(0);
+  let seed = 7141;
+  for (let i = 0; i < length; i++) {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    data[i] = seed / 2147483648 - 1;
+  }
+  const wind = context.createBufferSource();
+  wind.buffer = buffer;
+  wind.loop = true;
+  const filter = context.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 280;
+  const volume = context.createGain();
+  volume.gain.value = .018;
+  wind.connect(filter).connect(volume).connect(context.destination);
+  wind.start();
 }
 
 export function playCreatureCue(id: string, cue: CreatureCue, position: Vec3): void {

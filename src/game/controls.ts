@@ -4,6 +4,7 @@ export interface Controls {
   update(dt: number): void;
   readonly position: THREE.Vector3;
   readonly isHidden: boolean;
+  teleport(x: number, z: number, target: THREE.Vector3): void;
   dispose(): void;
 }
 
@@ -35,6 +36,12 @@ export function createControls(
   return {
     get position() { return camera.position; },
     get isHidden() { return keys.has('ShiftLeft') || keys.has('ShiftRight'); },
+    teleport(x, z, target) {
+      camera.position.set(x, heightAt(x, z) + 1.75, z);
+      camera.lookAt(target);
+      yaw = camera.rotation.y;
+      pitch = camera.rotation.x;
+    },
     update(dt) {
       const forward = Number(keys.has('KeyW')) - Number(keys.has('KeyS'));
       const side = Number(keys.has('KeyD')) - Number(keys.has('KeyA'));

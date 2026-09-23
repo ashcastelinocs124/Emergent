@@ -17,7 +17,7 @@ export function createItemViews(scene: THREE.Scene, items: ItemState[]): { sync(
     const mesh = new THREE.Mesh(geometry, materials[item.kind]);
     mesh.scale.set(item.kind === 'egg' ? .75 : 1, item.kind === 'egg' ? 1.45 : 1, item.kind === 'egg' ? .78 : 1);
     mesh.castShadow = true;
-    mesh.position.set(item.position.x, terrainHeight(item.position.x, item.position.z) + (item.kind === 'component' ? .9 : item.kind === 'spore' ? .35 : 1.05), item.position.z);
+    mesh.position.set(item.position.x, terrainHeight(item.position.x, item.position.z) + (item.kind === 'component' ? 1.65 : item.kind === 'spore' ? .35 : 1.05), item.position.z);
     mesh.visible = item.available;
     mesh.name = item.id;
     views.set(item.id, mesh);
@@ -31,7 +31,7 @@ export function createItemViews(scene: THREE.Scene, items: ItemState[]): { sync(
         mesh.visible = item.available;
         mesh.position.x = item.position.x;
         mesh.position.z = item.position.z;
-        mesh.position.y = terrainHeight(item.position.x, item.position.z) + (item.kind === 'component' ? .9 : item.kind === 'spore' ? .35 : 1.05);
+        mesh.position.y = terrainHeight(item.position.x, item.position.z) + (item.kind === 'component' ? 1.65 : item.kind === 'spore' ? .35 : 1.05);
         if (item.kind === 'egg') mesh.rotation.y = world.time * .1;
       }
     },

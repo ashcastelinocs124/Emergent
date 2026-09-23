@@ -34,6 +34,16 @@ export function createVisor(root: HTMLElement): Visor {
         : world.player.inventory.some(item => item.kind === 'component')
           ? 'Return to your ship and install the drive regulator.'
           : 'Find the missing drive regulator beyond the nesting grounds.';
+      const carryingComponent = world.player.inventory.some(item => item.kind === 'component');
+      const objective = carryingComponent || world.componentInstalled ? world.shipPosition
+        : world.items.find(item => item.kind === 'component' && item.available)?.position;
+      if (objective) {
+        const dx = objective.x - world.player.position.x;
+        const dz = objective.z - world.player.position.z;
+        const bearing = Math.round((Math.atan2(dx, -dz) * 180 / Math.PI + 360) % 360);
+        const range = Math.round(Math.hypot(dx, dz));
+        find('visor-bearing').textContent = `${carryingComponent || world.componentInstalled ? 'SHIP' : 'DRIVE'} SIGNAL · ${String(bearing).padStart(3, '0')}° · ${range}M`;
+      }
       const text = performance.now() < messageUntil ? message : target ? `[ E ] ${target.label}` : '';
       prompt.textContent = text;
       prompt.classList.toggle('visible', Boolean(text));

@@ -9,21 +9,35 @@ export interface Habitat {
 
 const WORLD_RADIUS = 150;
 
+function groundTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 256;
+  const context = canvas.getContext('2d')!;
+  context.fillStyle = '#e0e7df';
+  context.fillRect(0, 0, 256, 256);
+  let seed = 314159;
+  const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+  for (let i = 0; i < 7000; i++) {
+    const shade = Math.round(110 + random() * 130);
+    context.fillStyle = `rgba(${shade},${Math.min(255, shade + 12)},${shade},${.08 + random() * .17})`;
+    const x = random() * 256;
+    const y = random() * 256;
+    const radius = .4 + random() * 2.4;
+    context.fillRect(x, y, radius, radius);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(24, 24);
+  texture.anisotropy = 4;
+  return texture;
+}
+
 export function terrainHeight(x: number, z: number): number {
   const ridges = Math.sin(x * 0.024) * Math.cos(z * 0.019) * 4.2;
   const detail = Math.sin(x * 0.071 + z * 0.045) * Math.cos(z * 0.084) * 1.15;
   const basin = -3.8 * Math.exp(-((x + 12) ** 2 + (z - 14) ** 2) / 2600);
   return ridges + detail + basin;
-}
-
-function boulder(scene: THREE.Scene, x: number, z: number, radius: number, material: THREE.Material): void {
-  const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 1), material);
-  mesh.position.set(x, terrainHeight(x, z) + radius * .38, z);
-  mesh.rotation.set(x * .11, z * .06, x * .03);
-  mesh.scale.set(1, .72 + ((x + z) % 7) * .03, .8);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  scene.add(mesh);
 }
 
 export function createHabitat(scene: THREE.Scene): Habitat {
@@ -44,21 +58,31 @@ export function createHabitat(scene: THREE.Scene): Habitat {
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   positions.needsUpdate = true;
   geometry.computeVertexNormals();
-  const ground = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .98, flatShading: false }));
+  const ground = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ map: groundTexture(), vertexColors: true, roughness: .98, flatShading: false }));
   ground.receiveShadow = true;
   scene.add(ground);
 
   const stone = new THREE.MeshStandardMaterial({ color: 0x43565b, roughness: .92, metalness: .06, flatShading: true });
+  const boulders = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), stone, 75);
+  const boulderMatrix = new THREE.Matrix4();
+  const boulderRotation = new THREE.Quaternion();
   for (let i = 0; i < 75; i++) {
     const angle = i * 2.39996;
     const distance = 20 + Math.sqrt(i / 75) * 130;
     const x = Math.cos(angle) * distance;
     const z = Math.sin(angle) * distance;
-    boulder(scene, x, z, 1.2 + (i % 9) * .24, stone);
+    const radius = 1.2 + (i % 9) * .24;
+    boulderRotation.setFromEuler(new THREE.Euler(x * .11, z * .06, x * .03));
+    boulderMatrix.compose(new THREE.Vector3(x, terrainHeight(x, z) + radius * .38, z), boulderRotation,
+      new THREE.Vector3(radius, radius * (.72 + ((x + z) % 7) * .03), radius * .8));
+    boulders.setMatrixAt(i, boulderMatrix);
   }
+  boulders.instanceMatrix.needsUpdate = true;
+  boulders.receiveShadow = true;
+  scene.add(boulders);
 
   const reedGeometry = new THREE.ConeGeometry(.32, 3.5, 5);
-  const reedMaterial = new THREE.MeshStandardMaterial({ color: 0x647e72, side: THREE.DoubleSide, roughness: .86 });
+  const reedMaterial = new THREE.MeshStandardMaterial({ color: 0x94aa8b, emissive: 0x173b32, emissiveIntensity: .42, side: THREE.DoubleSide, roughness: .86 });
   const reeds = new THREE.InstancedMesh(reedGeometry, reedMaterial, 1250);
   const matrix = new THREE.Matrix4();
   const rotation = new THREE.Quaternion();
@@ -85,6 +109,9 @@ export function createHabitat(scene: THREE.Scene): Habitat {
   const fungiCap = new THREE.SphereGeometry(1.2, 10, 6);
   const stemMaterial = new THREE.MeshStandardMaterial({ color: 0x324950, roughness: .72 });
   const capMaterial = new THREE.MeshStandardMaterial({ color: 0x6ca7a4, emissive: 0x285154, emissiveIntensity: .7, roughness: .52 });
+  const stems = new THREE.InstancedMesh(fungiStem, stemMaterial, 70);
+  const caps = new THREE.InstancedMesh(fungiCap, capMaterial, 70);
+  rotation.identity();
   for (let i = 0; i < 70; i++) {
     const angle = i * 2.399963;
     const radius = 16 + Math.sqrt(i / 70) * 105;
@@ -92,15 +119,17 @@ export function createHabitat(scene: THREE.Scene): Habitat {
     const z = Math.sin(angle) * radius;
     const height = terrainHeight(x, z);
     const s = .45 + (Math.sin(i * 14.7) + 1) * .55;
-    const stem = new THREE.Mesh(fungiStem, stemMaterial);
-    stem.position.set(x, height + 1.2 * s, z);
-    stem.scale.set(s, s, s);
-    const cap = new THREE.Mesh(fungiCap, capMaterial);
-    cap.position.set(x, height + 2.2 * s, z);
-    cap.scale.set(s * 1.35, s * .24, s * 1.35);
-    stem.castShadow = cap.castShadow = i % 4 === 0;
-    scene.add(stem, cap);
+    position.set(x, height + 1.2 * s, z);
+    scale.set(s, s, s);
+    matrix.compose(position, rotation, scale);
+    stems.setMatrixAt(i, matrix);
+    position.y = height + 2.2 * s;
+    scale.set(s * 1.35, s * .24, s * 1.35);
+    matrix.compose(position, rotation, scale);
+    caps.setMatrixAt(i, matrix);
   }
+  stems.instanceMatrix.needsUpdate = caps.instanceMatrix.needsUpdate = true;
+  scene.add(stems, caps);
 
   const shipPosition = new THREE.Vector3(-12, terrainHeight(-12, 14), 14);
   const hull = new THREE.Mesh(new THREE.CapsuleGeometry(3, 8, 8, 16), new THREE.MeshStandardMaterial({ color: 0x9aa5a0, metalness: .72, roughness: .34 }));
@@ -141,10 +170,13 @@ export function createHabitat(scene: THREE.Scene): Habitat {
   scene.add(nestLight);
 
   const componentPosition = new THREE.Vector3(76, terrainHeight(76, -29), -29);
-  const wreck = new THREE.Mesh(new THREE.BoxGeometry(4, 1.3, 3), new THREE.MeshStandardMaterial({ color: 0x36494c, metalness: .77, roughness: .52 }));
+  const wreck = new THREE.Mesh(new THREE.BoxGeometry(4, 1.3, 3), new THREE.MeshStandardMaterial({ color: 0x66756c, metalness: .38, roughness: .62 }));
   wreck.position.copy(componentPosition).add(new THREE.Vector3(0, .5, 0));
   wreck.rotation.y = .63;
   wreck.castShadow = true;
   scene.add(wreck);
+  const wreckBeacon = new THREE.PointLight(0xe8aa61, 5, 13, 2);
+  wreckBeacon.position.copy(componentPosition).add(new THREE.Vector3(1.2, 2.5, .6));
+  scene.add(wreckBeacon);
   return { heightAt: terrainHeight, shipPosition, nestPosition, componentPosition };
 }
