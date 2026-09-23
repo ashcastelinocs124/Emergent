@@ -302,12 +302,14 @@ try {
         }
       }
       accumulator -= fixedStep;
-      for (const creature of world.creatures) {
-        const result = scheduler.takeReady(creature.id);
+      for (let creatureIndex = 0; creatureIndex < world.creatures.length; creatureIndex++) {
+        const creatureId = world.creatures[creatureIndex].id;
+        const result = scheduler.takeReady(creatureId);
         if (result) {
+          jevMetrics.record(result, world.time);
           const applied = applyDecision(world, result);
           if (applied !== world) {
-            world = applied; decisionCount++; jevMetrics.record(result, world.time);
+            world = applied; decisionCount++;
             const decided = world.creatures.find(candidate => candidate.id === result.creatureId);
             if (decided) {
               if (decided.speciesId === 'guardian' && result.intent.action === 'FOLLOW' &&
@@ -322,7 +324,8 @@ try {
             if (connection === 'waiting') setConnection('ready');
           } else discardedDecisions++;
         }
-        const error = scheduler.takeError(creature.id);
+        const error = scheduler.takeError(creatureId);
+        const creature = world.creatures[creatureIndex];
         if (error) {
           decisionErrors++;
           consecutiveErrors++;
@@ -365,7 +368,7 @@ try {
     if (debugDisplay) {
       const active = world.creatures.filter(creature => creature.currentIntent);
       const metrics = jevMetrics.summary(world.time);
-      debugDisplay.textContent = `SIM ${world.time.toFixed(1)}s\nACTIVE ${active.length}/${world.creatures.length}\nJEV DECISIONS ${decisionCount} (${metrics.decisionsPerMinute}/MIN)\nP50/P95 ${metrics.p50Ms.toFixed(0)}/${metrics.p95Ms.toFixed(0)}ms\nTOKENS ${metrics.inputTokens}/${metrics.outputTokens}\nEST COST $${metrics.estimatedUsd.toFixed(5)}\nERRORS ${decisionErrors} · STALE ${discardedDecisions}\n${active.slice(0, 12).map(creature => `${creature.id}: ${creature.currentIntent?.action}`).join('\n')}`;
+      debugDisplay.textContent = `SIM ${world.time.toFixed(1)}s\nACTIVE ${active.length}/${world.creatures.length}\nJEV REPLIES ${metrics.decisions} (${metrics.decisionsPerMinute}/MIN) · ACCEPTED ${decisionCount}\nP50/P95 ${metrics.p50Ms.toFixed(0)}/${metrics.p95Ms.toFixed(0)}ms\nTOKENS ${metrics.inputTokens}/${metrics.outputTokens}\nEST COST $${metrics.estimatedUsd.toFixed(5)}\nERRORS ${decisionErrors} · STALE ${discardedDecisions}\n${active.slice(0, 12).map(creature => `${creature.id}: ${creature.currentIntent?.action}`).join('\n')}`;
     }
     const dusk = Math.max(0, Math.min(1, (world.time - 240) / 120));
     (scene.background as THREE.Color).copy(daySky).lerp(duskSky, dusk);
