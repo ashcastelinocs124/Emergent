@@ -157,7 +157,7 @@ export function createInitialWorld(seed: number, shipPosition: Vec3, nestPositio
     position: { x: -20 + rng() * 75, y: 0, z: -60 + rng() * 65 }, available: true }));
   for (let i = 0; i < 5; i++) items.push({ id: `egg-${i + 1}`, kind: 'egg', ownerSpecies: 'guardian',
     position: { x: nestPosition.x + Math.cos(i * 2.4) * 2.2, y: 0, z: nestPosition.z + Math.sin(i * 2.4) * 2.2 }, available: true });
-  items.push({ id: 'ship-component', kind: 'component', position: { x: nestPosition.x + 18, y: 0, z: nestPosition.z + 13 }, available: true });
+  items.push({ id: 'ship-component', kind: 'component', position: { x: nestPosition.x + 19.1, y: 0, z: nestPosition.z + 13.6 }, available: true });
   return { time: 0, player: { id: 'player', position: { ...shipPosition }, inventory: [], air: 1, power: 1,
     food: 1, health: 1, hidden: false, scannerOn: false }, creatures, items,
     nests: [{ id: 'guardian-nest', speciesId: 'guardian', position: { ...nestPosition }, radius: 16 }],

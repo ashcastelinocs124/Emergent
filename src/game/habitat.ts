@@ -121,6 +121,14 @@ export function createHabitat(scene: THREE.Scene): Habitat {
   const shipBeacon = new THREE.PointLight(0x9ec8c4, 5, 24, 2);
   shipBeacon.position.copy(shipPosition).add(new THREE.Vector3(2, 3, 1));
   scene.add(shipBeacon);
+  const consolePedestal = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.8, .8), new THREE.MeshStandardMaterial({ color: 0x37494c, metalness: .75, roughness: .43 }));
+  consolePedestal.position.copy(shipPosition).add(new THREE.Vector3(2, 1, 0));
+  consolePedestal.castShadow = true;
+  scene.add(consolePedestal);
+  const consoleScreen = new THREE.Mesh(new THREE.PlaneGeometry(.95, .58), new THREE.MeshBasicMaterial({ color: 0x8dc8bb, side: THREE.DoubleSide }));
+  consoleScreen.position.copy(shipPosition).add(new THREE.Vector3(2, 1.75, .42));
+  consoleScreen.rotation.x = -.4;
+  scene.add(consoleScreen);
 
   const nestPosition = new THREE.Vector3(58, terrainHeight(58, -42), -42);
   const nest = new THREE.Mesh(new THREE.TorusGeometry(5, 1.1, 10, 30), new THREE.MeshStandardMaterial({ color: 0x352f47, roughness: 1 }));
@@ -131,13 +139,6 @@ export function createHabitat(scene: THREE.Scene): Habitat {
   const nestLight = new THREE.PointLight(0x975fc5, 7, 19, 2);
   nestLight.position.copy(nestPosition).add(new THREE.Vector3(0, 3.5, 0));
   scene.add(nestLight);
-  for (let i = 0; i < 5; i++) {
-    const egg = new THREE.Mesh(new THREE.SphereGeometry(.9, 16, 12), new THREE.MeshStandardMaterial({ color: 0x8b9fb1, emissive: 0x142c45, emissiveIntensity: .5, roughness: .28 }));
-    egg.scale.set(.75, 1.45, .78);
-    egg.position.set(nestPosition.x + Math.cos(i * 2.4) * 2.2, nestPosition.y + 1.2, nestPosition.z + Math.sin(i * 2.4) * 2.2);
-    egg.castShadow = true;
-    scene.add(egg);
-  }
 
   const componentPosition = new THREE.Vector3(76, terrainHeight(76, -29), -29);
   const wreck = new THREE.Mesh(new THREE.BoxGeometry(4, 1.3, 3), new THREE.MeshStandardMaterial({ color: 0x36494c, metalness: .77, roughness: .52 }));
@@ -145,9 +146,5 @@ export function createHabitat(scene: THREE.Scene): Habitat {
   wreck.rotation.y = .63;
   wreck.castShadow = true;
   scene.add(wreck);
-  const component = new THREE.Mesh(new THREE.CylinderGeometry(.55, .55, 1.2, 10), new THREE.MeshStandardMaterial({ color: 0xc28d60, emissive: 0x5c270b, emissiveIntensity: .6, metalness: .7 }));
-  component.position.copy(componentPosition).add(new THREE.Vector3(1.1, 1.2, .6));
-  component.rotation.z = .4;
-  scene.add(component);
   return { heightAt: terrainHeight, shipPosition, nestPosition, componentPosition };
 }

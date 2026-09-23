@@ -42,3 +42,21 @@ export function playCreatureCue(id: string, cue: CreatureCue, position: Vec3): v
   voice.stop(now + 1);
   voice.onended = () => { voice.disconnect(); gain.disconnect(); pan.disconnect(); };
 }
+
+export function playSuitAlert(air: number): void {
+  if (!context || context.state !== 'running' || air >= .25) return;
+  const now = context.currentTime;
+  if (now - (lastCue.get('suit:air') ?? -100) < 4) return;
+  lastCue.set('suit:air', now);
+  const pulse = context.createOscillator();
+  const gain = context.createGain();
+  pulse.type = 'sine';
+  pulse.frequency.value = 560;
+  gain.gain.setValueAtTime(.0001, now);
+  gain.gain.linearRampToValueAtTime(.045, now + .04);
+  gain.gain.linearRampToValueAtTime(.0001, now + .25);
+  pulse.connect(gain).connect(context.destination);
+  pulse.start(now);
+  pulse.stop(now + .3);
+  pulse.onended = () => { pulse.disconnect(); gain.disconnect(); };
+}

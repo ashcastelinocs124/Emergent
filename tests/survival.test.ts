@@ -1,0 +1,75 @@
+import { describe, expect, test } from 'vitest';
+import { dropItem, interact, recoverAtShip, repairShip, tickSuit, useItem } from '../src/shared/survival';
+import { at, creature, world } from './fixtures';
+
+describe('expedition survival', () => {
+  test('air drains outside the ship and refills in its shelter', () => {
+    const scene = world([]);
+    scene.player.position = at(0, 0);
+    const out = tickSuit(scene.player, 30, scene.shipPosition);
+    expect(out.air).toBeLessThan(1);
+    const back = tickSuit({ ...out, position: at(-20, 10) }, 30, scene.shipPosition);
+    expect(back.air).toBeGreaterThan(out.air);
+  });
+
+  test('scanner drains power and zero air triggers recoverable failure', () => {
+    const scene = world([]);
+    const scan = tickSuit({ ...scene.player, scannerOn: true, air: .01 }, 30, scene.shipPosition);
+    expect(scan.power).toBeLessThan(1);
+    expect(scan.air).toBe(0);
+    expect(scan.health).toBe(0);
+    const recovered = tickSuit({ ...scan, position: scene.shipPosition }, 30, scene.shipPosition);
+    expect(recovered.air).toBeGreaterThan(0);
+    expect(recovered.health).toBeGreaterThan(0);
+  });
+
+  test('picking up an egg makes nearby guardian remember; dropping it removes carried threat', () => {
+    const guardian = creature('guardian-1', 'guardian', at(2, 0));
+    guardian.currentIntent = { action: 'EXPLORE' };
+    const scene = world([guardian]);
+    scene.player.position = at(0, 0);
+    scene.items.push({ id: 'egg-1', kind: 'egg', ownerSpecies: 'guardian', position: at(1, 0), available: true });
+    const stolen = interact(scene, 'egg-1');
+    expect(stolen.player.inventory.map(item => item.id)).toContain('egg-1');
+    expect(stolen.creatures[0].memory.events.some(fact => fact.type === 'egg_stolen')).toBe(true);
+    expect(stolen.creatures[0].currentIntent).toBeNull();
+    const dropped = dropItem(stolen, 'egg-1');
+    expect(dropped.player.inventory).toHaveLength(0);
+    expect(dropped.items.find(item => item.id === 'egg-1')?.available).toBe(true);
+  });
+
+  test('eggs can be eaten to restore recovery resources', () => {
+    const scene = world([]);
+    scene.player.food = .2;
+    scene.player.health = .5;
+    scene.player.inventory.push({ id: 'egg-1', kind: 'egg', ownerSpecies: 'guardian', position: at(0, 0), available: false });
+    const used = useItem(scene, 'egg-1');
+    expect(used.player.food).toBeGreaterThan(.2);
+    expect(used.player.health).toBeGreaterThan(.5);
+    expect(used.player.inventory).toHaveLength(0);
+  });
+
+  test('repair requires the recovered component and proximity to ship', () => {
+    const scene = world([]);
+    expect(repairShip(scene)).toBe(scene);
+    scene.player.inventory.push({ id: 'ship-component', kind: 'component', position: at(0, 0), available: false });
+    expect(repairShip(scene)).toBe(scene);
+    scene.player.position = scene.shipPosition;
+    const fixed = repairShip(scene);
+    expect(fixed.componentInstalled).toBe(true);
+    expect(fixed.player.inventory).toHaveLength(0);
+  });
+
+  test('suit failure returns the explorer to shelter and leaves carried items retrievable', () => {
+    const scene = world([]);
+    scene.player.health = 0;
+    scene.player.position = at(24, -6);
+    scene.player.inventory.push({ id: 'ship-component', kind: 'component', position: at(0, 0), available: false });
+    scene.items.push({ id: 'ship-component', kind: 'component', position: at(0, 0), available: false });
+    const recovered = recoverAtShip(scene);
+    expect(recovered.player.position).toEqual(scene.shipPosition);
+    expect(recovered.player.health).toBeGreaterThan(0);
+    expect(recovered.player.inventory).toHaveLength(0);
+    expect(recovered.items[0]).toMatchObject({ available: true, position: at(24, -6) });
+  });
+});

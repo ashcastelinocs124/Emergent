@@ -4,8 +4,12 @@ import { createControls } from './game/controls';
 import { createInitialWorld, applyDecision, stepWorld } from './game/world';
 import { createDecisionScheduler } from './game/scheduler';
 import { createCreatureViews } from './game/creatures';
-import { playCreatureCue, setAudioListener, unlockAudio } from './game/audio';
+import { playCreatureCue, playSuitAlert, setAudioListener, unlockAudio } from './game/audio';
 import { getValidIntents } from './shared/species';
+import { tickSuit, interact, dropItem, useItem, repairShip, recoverAtShip } from './shared/survival';
+import { createVisor } from './ui/visor';
+import { findInteractionTarget } from './game/player';
+import { createItemViews } from './game/items';
 import type { DecisionInput, DecisionResult } from './shared/model';
 import './style.css';
 
@@ -50,13 +54,51 @@ try {
 
   const habitat = createHabitat(scene);
   const camera = new THREE.PerspectiveCamera(76, window.innerWidth / window.innerHeight, .1, 500);
-  camera.position.copy(habitat.shipPosition).add(new THREE.Vector3(-8, 1.75, 10));
+  camera.position.copy(habitat.shipPosition).add(new THREE.Vector3(-5, 1.75, 8));
   const controls = createControls(camera, renderer.domElement, habitat.heightAt);
   const query = new URLSearchParams(window.location.search);
   const debug = query.has('debug');
   const creatureCount = debug ? Math.max(20, Math.min(40, Number(query.get('creatures')) || 30)) : 30;
   let world = createInitialWorld(42, habitat.shipPosition, habitat.nestPosition, creatureCount);
   const creatureViews = createCreatureViews(scene, world.creatures);
+  const itemViews = createItemViews(scene, world.items);
+  const visor = createVisor(document.querySelector<HTMLElement>('#visor')!);
+  let target = findInteractionTarget(world, camera);
+  window.addEventListener('keydown', event => {
+    if (event.repeat) return;
+    if (event.code === 'KeyQ') {
+      world.player.scannerOn = !world.player.scannerOn && world.player.power > 0;
+      visor.message(world.player.scannerOn ? 'SCANNER ACTIVE' : 'SCANNER OFFLINE');
+    }
+    if (event.code === 'KeyE' && target) {
+      if (target.id === 'ship-console') {
+        const repaired = repairShip(world);
+        if (repaired !== world) { world = repaired; visor.message('DRIVE REGULATOR INSTALLED'); }
+        else if (world.componentInstalled) visor.message('BOARDING SYSTEM READY');
+        else visor.message('DRIVE REGULATOR REQUIRED');
+      } else {
+        const picked = interact(world, target.id);
+        if (picked !== world) {
+          const item = world.items.find(candidate => candidate.id === target!.id);
+          world = picked;
+          visor.message(item?.kind === 'egg' ? 'EGG COLLECTED · MOVEMENT DETECTED' : `${item?.kind.toUpperCase()} SECURED`);
+          if (item?.kind === 'egg') for (const creature of world.creatures) {
+            if (creature.speciesId === 'guardian' && creature.memory.events.some(fact => fact.type === 'egg_stolen'))
+              playCreatureCue(creature.id, 'guardian-warning', creature.position);
+          }
+        }
+      }
+    }
+    if (event.code === 'KeyR' && world.player.inventory.length) {
+      const item = world.player.inventory.at(-1)!;
+      world = dropItem(world, item.id);
+      visor.message(`${item.kind.toUpperCase()} DROPPED`);
+    }
+    if (event.code === 'KeyF') {
+      const egg = world.player.inventory.find(item => item.kind === 'egg');
+      if (egg) { world = useItem(world, egg.id); visor.message('NUTRIENTS RESTORED'); }
+    }
+  });
   let decisionCount = 0;
   let decisionErrors = 0;
   const scheduler = createDecisionScheduler(async (input: DecisionInput): Promise<DecisionResult> => {
@@ -106,6 +148,13 @@ try {
     while (accumulator >= fixedStep) {
       const stepped = stepWorld(world, fixedStep);
       world = stepped.world;
+      world.player = tickSuit(world.player, fixedStep, world.shipPosition);
+      playSuitAlert(world.player.air);
+      if (world.player.health <= 0) {
+        world = recoverAtShip(world);
+        camera.position.set(world.shipPosition.x + 2, habitat.heightAt(world.shipPosition.x + 2, world.shipPosition.z + 5) + 1.75, world.shipPosition.z + 5);
+        visor.message('SUIT FAILURE · EMERGENCY RETURN TO SHIP', 5000);
+      }
       for (const event of stepped.events) {
         if (event.type === 'attacked') {
           const species = world.creatures.find(creature => creature.id === event.creatureId)?.speciesId;
@@ -140,6 +189,9 @@ try {
     if (scene.fog instanceof THREE.FogExp2) scene.fog.color.copy(scene.background as THREE.Color);
     sun.intensity = 2.6 - dusk * 1.5;
     creatureViews.sync(world, accumulator / fixedStep);
+    itemViews.sync(world);
+    target = findInteractionTarget(world, camera);
+    visor.sync(world, target);
     renderer.render(scene, camera);
   });
 } catch (error) {

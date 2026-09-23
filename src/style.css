@@ -18,3 +18,28 @@ button:hover { background: rgba(124,179,153,.3); }
 .game-hint { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); font-size: .65rem; color: #d8e9df; text-shadow: 0 2px 10px #071017; pointer-events: none; opacity: 0; }
 .game-hint.visible { opacity: 1; }
 .mode-badge { position: fixed; right: 1.4rem; top: 1.2rem; z-index: 20; padding: .35rem .65rem; color: #ffe2a8; border: 1px solid #cba76b; background: rgba(19,22,22,.8); font: 500 .65rem 'DM Mono', monospace; letter-spacing: .13em; }
+.visor { position:fixed; inset:0; z-index:4; pointer-events:none; font-family:'DM Mono',monospace; color:#d3e8dd; text-shadow:0 1px 5px #051116; letter-spacing:.09em; }
+.visor-vignette { position:absolute; inset:0; border-radius:9% / 12%; box-shadow:inset 0 0 55px 18px #031018b3,inset 0 0 170px 20px #061520a8; border:12px solid #101b20a8; }
+.visor-vignette::before,.visor-vignette::after { content:''; position:absolute; inset:23px; border:1px solid #b0e9da1c; border-radius:6% / 9%; }
+.visor-vignette::after { inset:28px; border-color:#72b49b12; }
+.visor-topline,.visor-bottom { position:absolute; left:4.4%; right:4.4%; display:flex; align-items:center; justify-content:space-between; gap:18px; font-size:clamp(.53rem,.68vw,.75rem); }
+.visor-topline { top:4.2%; padding-bottom:13px; border-bottom:1px solid #b0e9da52; }
+.visor-bottom { bottom:4%; padding-top:13px; border-top:1px solid #b0e9da52; color:#a5c8bd; }
+.visor-brand { color:#e1f8eb; font-weight:600; }
+.visor-signal { color:#a5dbbc; }
+.visor-left,.visor-right { position:absolute; top:18%; width:220px; max-width:17vw; font-size:.67rem; }
+.visor-left { left:4.5%; }.visor-right { right:4.5%; text-align:right; }
+.visor-section-label { color:#87a99f; font-size:.57rem; margin-bottom:18px; border-bottom:1px solid #b0e9da32; padding-bottom:7px; }
+.visor-resource { display:grid; grid-template-columns:1fr auto; gap:8px; margin:0 0 18px; color:#e7f4ea; }
+.visor-resource span { color:#bdd5c8; }.visor-resource strong { font-size:.74rem; }
+.visor-resource i { grid-column:1/3; display:block; height:3px; background:linear-gradient(90deg,#d2ebcf 0%,#8fbea9 var(--level,100%),#3b5251 var(--level,100%)); box-shadow:0 0 9px #91cdb48c; }
+.visor-resource.danger { color:#e6b2a2; }.visor-resource.danger i { background:linear-gradient(90deg,#e7a58b var(--level,100%),#503537 var(--level,100%)); }
+.visor-objective { font:600 1rem 'Barlow Condensed',sans-serif; color:#f1f6e8; letter-spacing:.16em; }
+.visor-right p { line-height:1.6; color:#bfd1c5; letter-spacing:.025em; }
+.visor-reticle { position:absolute; left:50%; top:50%; width:34px; height:34px; transform:translate(-50%,-50%); opacity:.72; }
+.visor-reticle span { position:absolute; background:#d5efe2; box-shadow:0 0 4px #d5efe2; }
+.visor-reticle span:nth-child(1),.visor-reticle span:nth-child(2) { width:7px;height:1px;top:16px; }.visor-reticle span:nth-child(1) { left:0; }.visor-reticle span:nth-child(2) { right:0; }
+.visor-reticle span:nth-child(3),.visor-reticle span:nth-child(4) { width:1px;height:7px;left:16px; }.visor-reticle span:nth-child(3) { top:0; }.visor-reticle span:nth-child(4) { bottom:0; }
+.visor-prompt { position:absolute; left:50%; top:57%; transform:translateX(-50%); color:#eaf4dd; font-size:.68rem; background:#0b201db5; padding:8px 12px; opacity:0; transition:opacity .2s; }
+.visor-prompt.visible { opacity:1; }
+@media (max-width:850px) { .visor-left,.visor-right { top:11%; max-width:25vw; }.visor-bottom span:nth-child(2) { display:none; } }
