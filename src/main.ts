@@ -8,7 +8,7 @@ import { playCreatureCue, playSuitAlert, setAudioListener, unlockAudio } from '.
 import { getValidIntents } from './shared/species';
 import { tickSuit, interact, dropItem, useItem, repairShip, recoverAtShip, witnessesTheft } from './shared/survival';
 import { createVisor, setDecisionConnection } from './ui/visor';
-import { creatureVisibility, findInteractionTarget } from './game/player';
+import { creatureVisibility, findInteractionTarget, sceneLineOfSight } from './game/player';
 import { createItemViews } from './game/items';
 import { emptyJournal, recordObservation } from './shared/journal';
 import { createJournalUI } from './ui/journal';
@@ -125,10 +125,16 @@ try {
         else visor.message('DRIVE REGULATOR REQUIRED');
       } else {
         const item = world.items.find(candidate => candidate.id === target!.id);
-        const witnesses = item?.kind === 'egg' ? new Set(world.creatures.filter(creature =>
-          creature.speciesId === 'guardian' && witnessesTheft(creature, world)).map(creature => creature.id)) : new Set<string>();
+        const witnesses = item?.kind === 'egg' ? new Set(world.creatures.filter(creature => {
+          if (creature.speciesId !== 'guardian' || !witnessesTheft(creature, world)) return false;
+          const from = new THREE.Vector3(creature.position.x,
+            habitat.heightAt(creature.position.x, creature.position.z) + 2, creature.position.z);
+          const to = new THREE.Vector3(world.player.position.x,
+            habitat.heightAt(world.player.position.x, world.player.position.z) + 1.5, world.player.position.z);
+          return sceneLineOfSight(from, to, habitat.occluders);
+        }).map(creature => creature.id)) : new Set<string>();
         const before = world;
-        const picked = interact(world, target.id);
+        const picked = interact(world, target.id, creature => witnesses.has(creature.id));
         if (picked !== world) {
           world = picked;
           for (const creature of world.creatures) {

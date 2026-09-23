@@ -48,10 +48,15 @@ export function creatureVisibility(camera: THREE.Camera, position: Vec3, occlude
     if (terrainHeight(x, z) > rayHeight - .35) { lineOfSight = false; break; }
   }
   if (lineOfSight && occluders.length) {
-    const direction = target.clone().sub(origin);
-    const range = direction.length();
-    const raycaster = new THREE.Raycaster(origin, direction.normalize(), 0, Math.max(0, range - .5));
-    lineOfSight = raycaster.intersectObjects(occluders, false).length === 0;
+    lineOfSight = sceneLineOfSight(origin, target, occluders);
   }
   return { lineOfSight, distance, orientation };
+}
+
+export function sceneLineOfSight(from: THREE.Vector3, to: THREE.Vector3, occluders: THREE.Object3D[]): boolean {
+  const direction = to.clone().sub(from);
+  const range = direction.length();
+  if (range < .5) return true;
+  const raycaster = new THREE.Raycaster(from, direction.normalize(), 0, range - .5);
+  return raycaster.intersectObjects(occluders, false).length === 0;
 }

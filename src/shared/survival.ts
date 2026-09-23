@@ -32,7 +32,8 @@ export function tickSuit(player: PlayerState, dt: number, shipPosition: Vec3): P
   return { ...player, air, power, food, health, scannerOn: power > 0 && player.scannerOn };
 }
 
-export function interact(world: WorldState, targetId: string): WorldState {
+export function interact(world: WorldState, targetId: string,
+  canWitness: (creature: CreatureState, world: WorldState) => boolean = witnessesTheft): WorldState {
   const item = world.items.find(candidate => candidate.id === targetId && candidate.available);
   if (!item || distance(world.player.position, item.position) > 3.5 || world.player.inventory.length >= 4) return world;
   if (item.kind === 'component' && !world.componentExposed) return world;
@@ -41,7 +42,7 @@ export function interact(world: WorldState, targetId: string): WorldState {
   let creatures = world.creatures;
   if (item.kind === 'egg' && item.ownerSpecies) {
     creatures = world.creatures.map(creature => {
-      if (creature.speciesId !== item.ownerSpecies || !witnessesTheft(creature, world)) return creature;
+      if (creature.speciesId !== item.ownerSpecies || !canWitness(creature, world)) return creature;
       const remembered = applyMemoryEvent(creature, { id: `${item.id}:${creature.id}:stolen`, type: 'egg_stolen',
         creatureId: creature.id, otherId: 'player', at: world.time, position: world.player.position });
       return { ...remembered, currentIntent: null, decisionEpoch: remembered.decisionEpoch + 1, nextDecisionAt: world.time };

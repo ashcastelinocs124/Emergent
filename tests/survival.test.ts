@@ -93,6 +93,16 @@ describe('expedition survival', () => {
     expect(interact(scene, 'egg-1').creatures[0].memory.events.some(event => event.type === 'egg_stolen')).toBe(true);
   });
 
+  test('a scene-occluded guardian does not remember an egg theft', () => {
+    const guardian = creature('guardian-1', 'guardian', at(2, 0));
+    guardian.facing = at(-1, 0);
+    const scene = world([guardian]);
+    scene.player.position = at(0, 0);
+    scene.items.push({ id: 'egg-1', kind: 'egg', ownerSpecies: 'guardian', position: at(1, 0), available: true });
+    const after = interact(scene, 'egg-1', () => false);
+    expect(after.creatures[0].memory.events).toHaveLength(0);
+  });
+
   test('repair requires the recovered component and proximity to ship', () => {
     const scene = world([]);
     expect(repairShip(scene)).toBe(scene);
