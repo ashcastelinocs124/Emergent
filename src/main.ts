@@ -7,6 +7,14 @@ const mount = document.querySelector<HTMLDivElement>('#game')!;
 const entry = document.querySelector<HTMLDivElement>('#entry')!;
 const enter = document.querySelector<HTMLButtonElement>('#enter')!;
 const hint = document.querySelector<HTMLDivElement>('#game-hint')!;
+const modeBadge = document.querySelector<HTMLDivElement>('#mode-badge')!;
+
+void fetch('/api/health').then(response => response.json()).then((health: { mode?: string }) => {
+  if (health.mode === 'fake') {
+    modeBadge.textContent = 'TEST SIMULATION';
+    modeBadge.hidden = false;
+  }
+}).catch(() => {});
 
 try {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });

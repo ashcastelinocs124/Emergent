@@ -17,3 +17,4 @@ button:hover { background: rgba(124,179,153,.3); }
 .controls-hint { margin-top: 2rem; font-size: .62rem; color: #a7b8b1; }
 .game-hint { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); font-size: .65rem; color: #d8e9df; text-shadow: 0 2px 10px #071017; pointer-events: none; opacity: 0; }
 .game-hint.visible { opacity: 1; }
+.mode-badge { position: fixed; right: 1.4rem; top: 1.2rem; z-index: 20; padding: .35rem .65rem; color: #ffe2a8; border: 1px solid #cba76b; background: rgba(19,22,22,.8); font: 500 .65rem 'DM Mono', monospace; letter-spacing: .13em; }

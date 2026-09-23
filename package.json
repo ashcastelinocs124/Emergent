@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "First-person alien ecosystem survival mystery",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -k \"vite\" \"tsx watch server/app.ts\"",
+    "dev:client": "vite",
+    "dev:server:test": "JEV_MODE=fake tsx server/app.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit && vite build",
