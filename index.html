@@ -27,6 +27,17 @@
     </div>
     <div id="game-hint" class="game-hint" aria-live="polite">Click to enter the expedition</div>
     <div id="mode-badge" class="mode-badge" hidden></div>
+    <div id="journal" class="journal-shell" hidden role="dialog" aria-label="Field Journal">
+      <div class="journal-frame">
+        <header class="journal-header"><div><span class="journal-kicker">EXPEDITION ARCHIVE / PERSONAL</span><h2>Field Journal</h2></div><button id="journal-close" type="button" aria-label="Close journal">CLOSE [J]</button></header>
+        <div class="journal-layout">
+          <aside class="journal-sidebar"><div class="journal-small">LIFEFORM INDEX</div><button class="journal-tab active" type="button" data-species="all">ALL SIGHTINGS</button><button class="journal-tab" type="button" data-species="guardian">GUARDIAN</button><button class="journal-tab" type="button" data-species="grazer">GRAZER</button><button class="journal-tab" type="button" data-species="stalker">STALKER</button><div class="journal-side-note">Record what you can see. The planet will not explain itself.</div></aside>
+          <section class="journal-sightings"><div class="journal-section-head"><span>OBSERVED BEHAVIOR</span><span id="journal-count">00 RECORDS</span></div><div id="journal-observations" class="journal-scroll"></div></section>
+          <section class="journal-hypotheses"><div class="journal-section-head"><span>WORKING THEORIES</span></div><form id="journal-form"><label for="hypothesis-condition">When</label><input id="hypothesis-condition" maxlength="100" autocomplete="off" placeholder="Something happens…" /><label for="hypothesis-response">I expect</label><input id="hypothesis-response" maxlength="100" autocomplete="off" placeholder="A creature responds…" /><button type="submit">Record hypothesis</button></form><div id="journal-theories" class="journal-scroll"></div></section>
+        </div>
+        <footer class="journal-footer"><span>PERSONAL NOTES · UNSENT</span><span>NO AUTOMATIC CONCLUSIONS</span></footer>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

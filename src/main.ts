@@ -8,8 +8,10 @@ import { playCreatureCue, playSuitAlert, setAudioListener, unlockAudio } from '.
 import { getValidIntents } from './shared/species';
 import { tickSuit, interact, dropItem, useItem, repairShip, recoverAtShip } from './shared/survival';
 import { createVisor } from './ui/visor';
-import { findInteractionTarget } from './game/player';
+import { creatureVisibility, findInteractionTarget } from './game/player';
 import { createItemViews } from './game/items';
+import { emptyJournal, recordObservation } from './shared/journal';
+import { createJournalUI } from './ui/journal';
 import type { DecisionInput, DecisionResult } from './shared/model';
 import './style.css';
 
@@ -63,9 +65,20 @@ try {
   const creatureViews = createCreatureViews(scene, world.creatures);
   const itemViews = createItemViews(scene, world.items);
   const visor = createVisor(document.querySelector<HTMLElement>('#visor')!);
+  let journal = emptyJournal();
+  const journalUI = createJournalUI(document.querySelector<HTMLElement>('#journal')!, () => journal,
+    updated => { journal = updated; }, open => {
+      if (open && document.pointerLockElement) document.exitPointerLock();
+      entry.classList.toggle('hidden', open || document.pointerLockElement === renderer.domElement);
+    });
   let target = findInteractionTarget(world, camera);
   window.addEventListener('keydown', event => {
     if (event.repeat) return;
+    if (event.code === 'KeyJ' && !(event.target instanceof HTMLInputElement)) {
+      journalUI.toggle();
+      return;
+    }
+    if (journalUI.isOpen()) return;
     if (event.code === 'KeyQ') {
       world.player.scannerOn = !world.player.scannerOn && world.player.power > 0;
       visor.message(world.player.scannerOn ? 'SCANNER ACTIVE' : 'SCANNER OFFLINE');
@@ -82,6 +95,14 @@ try {
           const item = world.items.find(candidate => candidate.id === target!.id);
           world = picked;
           visor.message(item?.kind === 'egg' ? 'EGG COLLECTED · MOVEMENT DETECTED' : `${item?.kind.toUpperCase()} SECURED`);
+          if (item?.kind === 'egg') for (const creature of world.creatures) {
+            if (creature.speciesId !== 'guardian') continue;
+            const visibility = creatureVisibility(camera, creature.position);
+            if (!world.player.scannerOn && visibility.distance > 22) continue;
+            journal = recordObservation(journal, { id: `egg-${item.id}-${creature.id}`, at: world.time,
+              creatureId: creature.id, speciesId: creature.speciesId, action: 'EGG_PICKUP',
+              position: { ...creature.position }, carriedItem: 'egg', note: 'Egg taken while this individual was in view.' }, visibility);
+          }
           if (item?.kind === 'egg') for (const creature of world.creatures) {
             if (creature.speciesId === 'guardian' && creature.memory.events.some(fact => fact.type === 'egg_stolen'))
               playCreatureCue(creature.id, 'guardian-warning', creature.position);
@@ -124,7 +145,7 @@ try {
   });
   document.addEventListener('pointerlockchange', () => {
     const locked = document.pointerLockElement === renderer.domElement;
-    entry.classList.toggle('hidden', locked);
+    entry.classList.toggle('hidden', locked || journalUI.isOpen());
     hint.classList.toggle('visible', !locked);
     enter.textContent = locked ? 'Enter expedition' : 'Resume expedition';
   });
@@ -135,16 +156,19 @@ try {
   });
   let previousFrame = performance.now();
   let accumulator = 0;
+  let nextObservationAt = 0;
   const fixedStep = .05;
   renderer.setAnimationLoop(() => {
     const now = performance.now();
     const frameDt = Math.min((now - previousFrame) / 1000, .1);
-    controls.update(frameDt);
+    if (!journalUI.isOpen()) controls.update(frameDt);
     previousFrame = now;
     world.player.position = { x: controls.position.x, y: controls.position.y, z: controls.position.z };
     setAudioListener(world.player.position);
     world.player.hidden = controls.isHidden;
-    accumulator += frameDt;
+    const sheltered = Math.hypot(world.player.position.x - world.shipPosition.x,
+      world.player.position.z - world.shipPosition.z) <= 10;
+    if (!(journalUI.isOpen() && sheltered)) accumulator += frameDt;
     while (accumulator >= fixedStep) {
       const stepped = stepWorld(world, fixedStep);
       world = stepped.world;
@@ -177,6 +201,20 @@ try {
         if (creature.alive && !creature.currentIntent && world.time >= creature.nextDecisionAt) {
           const intents = getValidIntents(creature, world);
           if (intents.length) scheduler.issue({ creatureId: creature.id, epoch: creature.decisionEpoch, world, intents });
+        }
+      }
+      if (world.time >= nextObservationAt) {
+        nextObservationAt = world.time + .5;
+        for (const creature of world.creatures) {
+          if (!creature.alive || !creature.currentIntent) continue;
+          const visibility = creatureVisibility(camera, creature.position);
+          if (!world.player.scannerOn && visibility.distance > 22) continue;
+          const updated = recordObservation(journal, { id: `sighting-${creature.id}-${creature.decisionEpoch}`,
+            at: world.time, creatureId: creature.id, speciesId: creature.speciesId,
+            action: creature.currentIntent.action, position: { ...creature.position },
+            carriedItem: world.player.inventory.find(item => item.kind === 'egg')?.kind ?? null,
+            note: `Observed ${creature.id} in the field.` }, visibility);
+          if (updated !== journal) { journal = updated; if (journalUI.isOpen()) journalUI.render(); }
         }
       }
     }
