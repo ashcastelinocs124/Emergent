@@ -41,3 +41,10 @@ export function createVisor(root: HTMLElement): Visor {
     message(text, durationMs = 2800) { message = text; messageUntil = performance.now() + durationMs; },
   };
 }
+
+export function setDecisionConnection(status: 'ready' | 'waiting' | 'paused'): void {
+  const label = document.querySelector<HTMLElement>('#visor-status');
+  const overlay = document.querySelector<HTMLElement>('#connection');
+  if (label) label.textContent = status === 'ready' ? 'LINK ACTIVE' : status === 'waiting' ? 'JEV LINK WAITING' : 'LINK LOST';
+  if (overlay) overlay.hidden = status !== 'paused';
+}

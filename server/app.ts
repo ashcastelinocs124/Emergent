@@ -32,6 +32,10 @@ export function createApp(decide: (input: DecisionInput) => Promise<DecisionResu
   const app = express();
   app.use(express.json({ limit: '64kb' }));
   app.get('/api/health', (_request, response) => {
+    if (process.env.JEV_MODE !== 'fake' && !process.env.TYPESAFE_API_KEY) {
+      response.status(503).json({ status: 'unavailable', mode: 'live', error: 'TYPESAFE_API_KEY is not configured' });
+      return;
+    }
     response.json({ status: 'ready', mode: process.env.JEV_MODE === 'fake' ? 'fake' : 'live' });
   });
   app.post('/api/decision', async (request, response) => {

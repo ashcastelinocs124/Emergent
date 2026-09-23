@@ -7,11 +7,12 @@ import { createCreatureViews } from './game/creatures';
 import { playCreatureCue, playSuitAlert, setAudioListener, unlockAudio } from './game/audio';
 import { getValidIntents } from './shared/species';
 import { tickSuit, interact, dropItem, useItem, repairShip, recoverAtShip } from './shared/survival';
-import { createVisor } from './ui/visor';
+import { createVisor, setDecisionConnection } from './ui/visor';
 import { creatureVisibility, findInteractionTarget } from './game/player';
 import { createItemViews } from './game/items';
 import { emptyJournal, recordObservation } from './shared/journal';
 import { createJournalUI } from './ui/journal';
+import { createPersistence } from './game/persistence';
 import type { DecisionInput, DecisionResult } from './shared/model';
 import './style.css';
 
@@ -61,11 +62,19 @@ try {
   const query = new URLSearchParams(window.location.search);
   const debug = query.has('debug');
   const creatureCount = debug ? Math.max(20, Math.min(40, Number(query.get('creatures')) || 30)) : 30;
-  let world = createInitialWorld(42, habitat.shipPosition, habitat.nestPosition, creatureCount);
+  const persistence = createPersistence(localStorage);
+  let saved: ReturnType<typeof persistence.load> = null;
+  try { saved = persistence.load(); }
+  catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to load expedition save.';
+    document.querySelector<HTMLElement>('.entry-copy')!.textContent = message;
+  }
+  let world = saved?.world ?? createInitialWorld(42, habitat.shipPosition, habitat.nestPosition, creatureCount);
+  if (saved) camera.position.set(world.player.position.x, world.player.position.y, world.player.position.z);
   const creatureViews = createCreatureViews(scene, world.creatures);
   const itemViews = createItemViews(scene, world.items);
   const visor = createVisor(document.querySelector<HTMLElement>('#visor')!);
-  let journal = emptyJournal();
+  let journal = saved?.journal ?? emptyJournal();
   const journalUI = createJournalUI(document.querySelector<HTMLElement>('#journal')!, () => journal,
     updated => { journal = updated; }, open => {
       if (open && document.pointerLockElement) document.exitPointerLock();
@@ -86,7 +95,7 @@ try {
     if (event.code === 'KeyE' && target) {
       if (target.id === 'ship-console') {
         const repaired = repairShip(world);
-        if (repaired !== world) { world = repaired; visor.message('DRIVE REGULATOR INSTALLED'); }
+        if (repaired !== world) { world = repaired; persistence.write(world, journal); visor.message('DRIVE REGULATOR INSTALLED'); }
         else if (world.componentInstalled) visor.message('BOARDING SYSTEM READY');
         else visor.message('DRIVE REGULATOR REQUIRED');
       } else {
@@ -122,10 +131,39 @@ try {
   });
   let decisionCount = 0;
   let decisionErrors = 0;
+  let consecutiveErrors = 0;
+  let firstErrorAt: number | null = null;
+  let connection: 'ready' | 'waiting' | 'paused' = 'ready';
+  const setConnection = (status: typeof connection) => { connection = status; setDecisionConnection(status); };
+  let wasSheltered = true;
   const scheduler = createDecisionScheduler(async (input: DecisionInput): Promise<DecisionResult> => {
     const response = await fetch('/api/decision', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
     if (!response.ok) throw new Error(`Decision service: ${response.status}`);
     return response.json() as Promise<DecisionResult>;
+  });
+  document.querySelector<HTMLButtonElement>('#connection-retry')!.addEventListener('click', async () => {
+    const button = document.querySelector<HTMLButtonElement>('#connection-retry')!;
+    button.disabled = true;
+    try {
+      const response = await fetch('/api/health');
+      if (!response.ok) throw new Error('Service still unavailable');
+      for (const creature of world.creatures) {
+        if (!creature.currentIntent) {
+          creature.decisionEpoch++;
+          creature.nextDecisionAt = world.time;
+          scheduler.invalidate(creature.id, creature.decisionEpoch);
+        }
+      }
+      consecutiveErrors = 0;
+      firstErrorAt = null;
+      setConnection('ready');
+      visor.message('JEV LINK RESTORED');
+    } catch {
+      visor.message('DECISION SERVICE STILL UNAVAILABLE');
+    } finally { button.disabled = false; }
+  });
+  document.querySelector<HTMLButtonElement>('#connection-title')!.addEventListener('click', () => {
+    location.reload();
   });
   const debugDisplay = debug ? document.createElement('pre') : null;
   if (debug) Object.assign(window, { __alienDebug: { camera, scene, renderer, getWorld: () => world } });
@@ -168,11 +206,13 @@ try {
     world.player.hidden = controls.isHidden;
     const sheltered = Math.hypot(world.player.position.x - world.shipPosition.x,
       world.player.position.z - world.shipPosition.z) <= 10;
-    if (!(journalUI.isOpen() && sheltered)) accumulator += frameDt;
+    if (!(journalUI.isOpen() && sheltered) && connection !== 'paused') accumulator += frameDt;
     while (accumulator >= fixedStep) {
       const stepped = stepWorld(world, fixedStep);
       world = stepped.world;
       world.player = tickSuit(world.player, fixedStep, world.shipPosition);
+      if (sheltered && !wasSheltered) persistence.write(world, journal);
+      wasSheltered = sheltered;
       playSuitAlert(world.player.air);
       if (world.player.health <= 0) {
         world = recoverAtShip(world);
@@ -191,17 +231,30 @@ try {
         const result = scheduler.takeReady(creature.id);
         if (result) {
           const applied = applyDecision(world, result);
-          if (applied !== world) { world = applied; decisionCount++; }
+          if (applied !== world) {
+            world = applied; decisionCount++; consecutiveErrors = 0; firstErrorAt = null;
+            if (connection === 'waiting') setConnection('ready');
+          }
         }
         const error = scheduler.takeError(creature.id);
         if (error) {
           decisionErrors++;
+          consecutiveErrors++;
+          firstErrorAt ??= world.time;
+          if (connection === 'ready') setConnection('waiting');
           creature.nextDecisionAt = world.time + 2;
         }
         if (creature.alive && !creature.currentIntent && world.time >= creature.nextDecisionAt) {
           const intents = getValidIntents(creature, world);
           if (intents.length) scheduler.issue({ creatureId: creature.id, epoch: creature.decisionEpoch, world, intents });
         }
+      }
+      if (firstErrorAt !== null && consecutiveErrors >= 3 && world.time - firstErrorAt >= 3 &&
+        world.creatures.every(creature => !creature.currentIntent)) {
+        persistence.write(world, journal);
+        setConnection('paused');
+        accumulator = 0;
+        break;
       }
       if (world.time >= nextObservationAt) {
         nextObservationAt = world.time + .5;

@@ -17,6 +17,20 @@ async function withServer(app: ReturnType<typeof createApp>, run: (url: string) 
 }
 
 describe('decision HTTP boundary', () => {
+  test('health reports missing live credentials as unavailable', async () => {
+    const originalKey = process.env.TYPESAFE_API_KEY;
+    const originalMode = process.env.JEV_MODE;
+    delete process.env.TYPESAFE_API_KEY;
+    delete process.env.JEV_MODE;
+    try {
+      await withServer(createApp(async request => ({ creatureId: request.creatureId, epoch: request.epoch, intent: request.intents[0] })), async url => {
+        expect((await fetch(`${url}/api/health`)).status).toBe(503);
+      });
+    } finally {
+      if (originalKey === undefined) delete process.env.TYPESAFE_API_KEY; else process.env.TYPESAFE_API_KEY = originalKey;
+      if (originalMode === undefined) delete process.env.JEV_MODE; else process.env.JEV_MODE = originalMode;
+    }
+  });
   test('returns the chosen intent for a valid request', async () => {
     await withServer(createApp(async request => ({ creatureId: request.creatureId, epoch: request.epoch, intent: request.intents[0] })), async url => {
       const response = await fetch(`${url}/api/decision`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
