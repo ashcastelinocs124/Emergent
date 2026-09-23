@@ -9,7 +9,7 @@ export interface DecisionScheduler {
 }
 
 export function createDecisionScheduler(send: (input: DecisionInput) => Promise<DecisionResult>, timeoutMs = 4000): DecisionScheduler {
-  const pending = new Map<string, number>();
+  const pending = new Map<string, { epoch: number }>();
   const deadlines = new Map<string, ReturnType<typeof setTimeout>>();
   const expected = new Map<string, number>();
   const ready = new Map<string, DecisionResult>();
@@ -22,13 +22,9 @@ export function createDecisionScheduler(send: (input: DecisionInput) => Promise<
   };
 
   const accept = (result: DecisionResult): void => {
-    const pendingEpoch = pending.get(result.creatureId);
-    if (pendingEpoch === undefined) return;
+    const request = pending.get(result.creatureId);
+    if (!request || request.epoch !== result.epoch) return;
     clearPending(result.creatureId);
-    if (pendingEpoch !== result.epoch) {
-      errors.set(result.creatureId, new Error('Jev response epoch mismatch'));
-      return;
-    }
     if (expected.get(result.creatureId) !== result.epoch) return;
     ready.set(result.creatureId, result);
   };
@@ -36,27 +32,38 @@ export function createDecisionScheduler(send: (input: DecisionInput) => Promise<
   return {
     issue(input) {
       if (pending.has(input.creatureId) || (expected.get(input.creatureId) ?? -1) > input.epoch) return false;
-      pending.set(input.creatureId, input.epoch);
+      const request = { epoch: input.epoch };
+      pending.set(input.creatureId, request);
       expected.set(input.creatureId, input.epoch);
       ready.delete(input.creatureId);
       errors.delete(input.creatureId);
       deadlines.set(input.creatureId, setTimeout(() => {
-        if (pending.get(input.creatureId) !== input.epoch) return;
+        if (pending.get(input.creatureId) !== request) return;
         clearPending(input.creatureId);
         if (expected.get(input.creatureId) === input.epoch)
           errors.set(input.creatureId, new Error('Jev decision timed out'));
       }, timeoutMs));
       try {
-        void send(input).then(accept, error => {
-          if (pending.get(input.creatureId) !== input.epoch) return;
+        void send(input).then(result => {
+          if (pending.get(input.creatureId) !== request) return;
+          if (result.epoch !== request.epoch || result.creatureId !== input.creatureId) {
+            clearPending(input.creatureId);
+            errors.set(input.creatureId, new Error('Jev response identity mismatch'));
+            return;
+          }
+          accept(result);
+        }, error => {
+          if (pending.get(input.creatureId) !== request) return;
           clearPending(input.creatureId);
           if (expected.get(input.creatureId) === input.epoch) {
             errors.set(input.creatureId, error instanceof Error ? error : new Error(String(error)));
           }
         });
       } catch (error) {
-        clearPending(input.creatureId);
-        errors.set(input.creatureId, error instanceof Error ? error : new Error(String(error)));
+        if (pending.get(input.creatureId) === request) {
+          clearPending(input.creatureId);
+          errors.set(input.creatureId, error instanceof Error ? error : new Error(String(error)));
+        }
       }
       return true;
     },

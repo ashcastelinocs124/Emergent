@@ -48,4 +48,33 @@ describe('creature decision scheduler', () => {
     await Promise.resolve();
     expect(scheduler.takeReady('g1')).toBeNull();
   });
+
+  test('a late old reply cannot cancel a replacement with a newer epoch', async () => {
+    const replies: ((result: DecisionResult) => void)[] = [];
+    const scheduler = createDecisionScheduler(() => new Promise(resolve => { replies.push(resolve); }));
+    scheduler.issue(input);
+    scheduler.invalidate('g1', 5);
+    scheduler.issue({ ...input, epoch: 5 });
+    replies[0]({ creatureId: 'g1', epoch: 4, intent: intents[0] });
+    await Promise.resolve();
+    replies[1]({ creatureId: 'g1', epoch: 5, intent: intents[0] });
+    await Promise.resolve();
+    expect(scheduler.takeReady('g1')?.epoch).toBe(5);
+    expect(scheduler.takeError('g1')).toBeNull();
+  });
+
+  test('a timed-out reply cannot replace a later retry of the same epoch', async () => {
+    const replies: ((result: DecisionResult) => void)[] = [];
+    const scheduler = createDecisionScheduler(() => new Promise(resolve => { replies.push(resolve); }), 5);
+    scheduler.issue(input);
+    await new Promise(resolve => setTimeout(resolve, 15));
+    expect(scheduler.takeError('g1')?.message).toMatch(/timed out/i);
+    scheduler.issue(input);
+    replies[0]({ creatureId: 'g1', epoch: 4, intent: intents[0] });
+    await Promise.resolve();
+    expect(scheduler.takeReady('g1')).toBeNull();
+    replies[1]({ creatureId: 'g1', epoch: 4, intent: intents[0] });
+    await Promise.resolve();
+    expect(scheduler.takeReady('g1')?.epoch).toBe(4);
+  });
 });

@@ -6,7 +6,8 @@ const distance = (a: Vec3, b: Vec3): number => Math.hypot(a.x - b.x, a.z - b.z);
 const clamp = (value: number): number => Math.max(0, Math.min(1, value));
 
 export function witnessesTheft(creature: CreatureState, world: WorldState): boolean {
-  if (!creature.alive || world.player.hidden || distance(creature.position, world.player.position) > 18) return false;
+  const separation = distance(creature.position, world.player.position);
+  if (!creature.alive || separation > 18 || (world.player.hidden && separation > 6)) return false;
   const dx = world.player.position.x - creature.position.x;
   const dz = world.player.position.z - creature.position.z;
   const length = Math.hypot(dx, dz) || 1;
