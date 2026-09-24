@@ -1,4 +1,8 @@
-# First playable performance notes
+# New Eden city performance notes
+
+A 1440 × 900 headless Chromium software-rendered check on 2026-09-23 sampled 49 frame intervals after the three-part repair path: 66.7 ms median and 133.4 ms p95. After batching facade windows and reducing the shadow map, a second 50-interval street sample measured 50.0 ms median and 66.7 ms p95. These software-rendered figures remain below a 30 fps floor and do not predict performance on a recent desktop GPU. Crowd meshes and other street props are still separate draws; a hardware benchmark and further batching remain open. The TypeScript production build succeeds; its single Three.js-heavy JavaScript chunk is about 581 kB before compression and 149 kB gzip.
+
+## Previous wilderness prototype
 
 Target: 60 fps on a recent desktop GPU with 40 creatures; 30 fps minimum during encounters.
 

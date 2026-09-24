@@ -38,9 +38,11 @@ export function createControls(
     get isHidden() { return keys.has('ShiftLeft') || keys.has('ShiftRight'); },
     teleport(x, z, target) {
       camera.position.set(x, heightAt(x, z) + 1.75, z);
-      camera.lookAt(target);
-      yaw = camera.rotation.y;
-      pitch = camera.rotation.x;
+      const delta = target.clone().sub(camera.position).normalize();
+      yaw = Math.atan2(-delta.x, -delta.z);
+      pitch = Math.asin(THREE.MathUtils.clamp(delta.y, -1, 1));
+      camera.rotation.order = 'YXZ';
+      camera.rotation.set(pitch, yaw, 0);
     },
     update(dt) {
       const forward = Number(keys.has('KeyW')) - Number(keys.has('KeyS'));

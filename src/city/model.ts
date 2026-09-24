@@ -1,0 +1,12 @@
+export type MaterialId = 'power-cell' | 'thermal-shield' | 'navigation-relay';
+export type ResidentId = 'mara' | 'eli' | 'sora' | 'dev';
+export type LocationId = 'workshop' | 'salvage-yard' | 'transit-depot';
+export type Claim = { id: string; speakerId: ResidentId; text: string; materialId: MaterialId; locationId: LocationId; at: number };
+export type Statement = { id: string; speakerId: ResidentId; text: string; at: number };
+export type Observation = { id: string; text: string; locationId: LocationId; at: number };
+export type Assumption = { materialId: MaterialId; locationId: LocationId; evidenceIds: string[]; status: 'possible' | 'supported' | 'disputed' };
+export type ResidentState = { activity: string; activityStreak: number; epoch: number; nextDecisionAt: number; heard: string[]; position: { x: number; z: number } };
+export type CityState = { version: 1; time: number; player: { x: number; z: number }; claims: Claim[]; statements: Statement[]; observations: Observation[]; assumptions: Partial<Record<MaterialId, Assumption>>; inventory: MaterialId[]; installed: MaterialId[]; access: Record<LocationId, boolean>; residents: Record<ResidentId, ResidentState>; lead: string | null; launched: boolean };
+export type CityChoiceOption = { id: string; description: string };
+export type CityChoiceInput = { kind: 'dialogue' | 'activity' | 'lead'; actorId: string; epoch: number; utterance?: string; state: CityState; options: CityChoiceOption[] };
+export type CityChoiceResult = { actorId: string; epoch: number; choiceId: string; elapsedMs: number; usage: { inputTokens: number; outputTokens: number } };

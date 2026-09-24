@@ -6,6 +6,7 @@ import { fakeDecision } from './fake-jev';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
+import { requestCityChoice, fakeCityChoice, validateCityChoiceInput } from './city-jev';
 
 const ACTIONS = new Set(['HUNT', 'FLEE', 'HIDE', 'EAT', 'FOLLOW', 'DEFEND', 'MATE', 'EXPLORE']);
 
@@ -38,6 +39,18 @@ export function createApp(decide: (input: DecisionInput) => Promise<DecisionResu
       return;
     }
     response.json({ status: 'ready', mode: process.env.JEV_MODE === 'fake' ? 'fake' : 'live' });
+  });
+  app.post('/api/city-choice', async (request, response) => {
+    if (!validateCityChoiceInput(request.body)) { response.status(400).json({ error: 'Invalid city choice request' }); return; }
+    try {
+      const result = await (process.env.JEV_MODE === 'fake' ? fakeCityChoice : requestCityChoice)(request.body);
+      if (result.actorId !== request.body.actorId || result.epoch !== request.body.epoch || !request.body.options.some((option: { id: string }) => option.id === result.choiceId)) { response.status(503).json({ error: 'Invalid city choice result' }); return; }
+      response.json(result);
+    } catch (error) {
+      const failure = error as { name?: string; status?: number; code?: string };
+      console.warn('Jev city choice failed', { name: failure?.name ?? 'UnknownError', status: failure?.status, code: failure?.code });
+      response.status(503).json({ error: 'City decision service unavailable' });
+    }
   });
   app.post('/api/decision', async (request, response) => {
     if (!isDecisionInput(request.body)) {

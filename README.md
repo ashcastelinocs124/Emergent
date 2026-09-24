@@ -1,26 +1,22 @@
-# Alien Ecosystem — first playable
+# Alien Ecosystem — New Eden
 
-A first-person browser survival mystery on a designed alien planet. Observe three species, test a field-journal theory about guardian behavior, retrieve the drive regulator, repair your ship, and escape. Thirty creatures make every high-level action choice through the Jev decision service; movement and collision execute those choices locally.
+A first-person browser mystery set in an Earth-like city on an unknown planet. Your ship has crashed in New Eden's south district. Talk with four residents, compare what they tell you in a helmet journal, make your own assumptions, find a power cell, thermal shield, and navigation relay, then repair and launch the ship.
 
-## Run
+Named residents use TypeSafe Jev to choose their next activity and to select an authored answer to your typed question. The optional ship computer uses Jev to choose a lead from evidence you actually collected. The model does not invent dialogue or decide where you walk, what you take, or when you leave. Resident memory and your journal survive reloads under a city-specific save key.
+
+## Run locally
 
 ```sh
 npm install
 cp .env.example .env
-# Put your TypeSafe API key in .env
+# Set TYPESAFE_API_KEY in .env
 npm run dev
 ```
 
-Open the Vite address shown in the terminal. A live expedition requires `TYPESAFE_API_KEY`. The game reports a lost decision link if credentials or the service are unavailable; it never silently substitutes local creature choices.
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173). The API key stays on the server. If Jev is unavailable, you can still explore and read saved notes; the visor shows a retry control. For deterministic development, run `npm run dev:server:test` and `npm run dev:client` in separate terminals. The UI labels that mode `TEST SIMULATION`.
 
-For a deterministic, visibly labelled development simulation, run `npm run dev:server:test` and `npm run dev:client` in separate terminals. `npm run e2e` starts its own fake service and browser. `npm test`, `npm run typecheck`, and `npm run build` provide the other checks.
+Use WASD to move, the mouse to look, E to talk/use/take, J for the journal, and Esc to release the cursor. In a conversation, type a question or select a suggested topic. Ask Mara about the ship to get oriented, then compare accounts before choosing where to search. The workshop cabinet and depot cage have physical switches; the salvage yard is open. Bring each part to the ship console, press E to install it, and launch once all three are fitted.
 
-## Controls
+`npm test`, `npm run typecheck`, `npm run build`, and `npm run e2e` run the checks. Browser tests use a labelled fake Jev service and a debug camera to navigate; `?debug=1` is only for development. The old wilderness source remains in the repository but is no longer the launched game. Its save key remains separate.
 
-WASD move; mouse look; Shift crouch; E interact; R drop held item; F eat a held egg or spore; Q toggle scanner; J open the field journal; Esc release the cursor. At the ship, the journal pauses time. In the field, creatures keep moving while it is open.
-
-The helmet visor shows air, power, health, a drive/ship signal bearing, inventory, and prompts. The drive regulator is pinned under the guardian clutch; moving an egg exposes it. Air and power refill near the ship. If the suit fails, emergency recovery returns the explorer to shelter and leaves carried items at the failure site.
-
-## Scope and current limits
-
-This is one habitat, one repair objective, three species, and 20–40 creatures (30 by default). The [design](docs/superpowers/specs/2026-09-23-alien-ecosystem-design.md), [playtest notes](docs/playtest.md), [performance notes](docs/performance.md), and [Jev measurements](docs/jev-measurements.md) document what is implemented and what still needs validation. Live ten-minute sessions at 20 and 40 creatures are measured, including intermittent timeouts at 40; a blind discovery test has not yet been run.
+The [city design](docs/superpowers/specs/2026-09-23-earth-city-repair-design.md), [playtest notes](docs/playtest.md), [performance notes](docs/performance.md), and [Jev measurements](docs/jev-measurements.md) describe the implemented slice and remaining validation. The city is a compact district with procedural buildings and stylized human figures, not a full photorealistic metropolis. A blind first-time player test and hardware GPU benchmark are still pending.
