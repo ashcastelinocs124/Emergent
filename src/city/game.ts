@@ -3,7 +3,8 @@ import { createControls } from '../game/controls';
 import { createCityHabitat } from './habitat';
 import { createResidentViews, createMaterialViews } from './residents';
 import { startCityAudio, uiBeep } from './audio';
-import { materials, materialIds, residents, residentIds, responses, clarifications } from './content';
+import { materials, materialIds, residents, residentIds, responses } from './content';
+import { getCasualReply, getResidentOpener } from './personas';
 import { createCityState, collectMaterial, installMaterial, isLaunchReady, setAssumption, recordObservation } from './state';
 import { getDialogueOptions, getValidActivities, getAvailableLeads } from './decisions';
 import { recordDialogueExchange } from './conversation';
@@ -48,7 +49,7 @@ export function startCityGame(): void {
     } catch (error) { setLink(false); throw error; }
     finally { clearTimeout(deadline); }
   }
-  const setChatMode = (mode: typeof chatMode) => { chatMode = mode; el('chat-mode').textContent = mode === 'ready' ? 'OPENAI CONVERSATION · LIVE' : mode === 'simulated' ? 'CONVERSATION · TEST SIMULATION' : 'OPENAI CHAT UNAVAILABLE · RECORDED ACCOUNTS'; };
+  const setChatMode = (mode: typeof chatMode) => { chatMode = mode; el('chat-mode').textContent = mode === 'ready' ? 'LIVE CONVERSATION' : mode === 'simulated' ? 'CONVERSATION · TEST SIMULATION' : 'RESIDENT ACCOUNTS · LOCAL'; };
   void fetch('/api/health').then(response => response.json()).then((health: { mode?: string; status?: string; chat?: typeof chatMode }) => {
     el('mode-badge').hidden = health.mode !== 'fake'; setLink(health.status === 'ready'); setChatMode(health.chat ?? 'unavailable');
   }).catch(() => setLink(false));
@@ -108,8 +109,9 @@ export function startCityGame(): void {
     if (!linkOkay) { toast('Jev link unavailable. Retry to talk.'); return; }
     conversationId = id; conversationTicket++; if (document.pointerLockElement) void document.exitPointerLock();
     el('conversation').hidden = false; el('speaker-name').textContent = residents[id].name; el('speaker-role').textContent = residents[id].role.toUpperCase();
-    el('conversation-line').textContent = `${residents[id].name} looks at your helmet, waiting.`;
-    el('conversation-context').textContent = state.residents[id].heard.length ? 'You have spoken before. They remember this conversation.' : 'A first encounter.';
+    const portrait = el<HTMLImageElement>('speaker-portrait'); portrait.src = `/portraits/${id}.jpg`; portrait.alt = `Portrait of ${residents[id].name}`;
+    el('conversation-line').textContent = getResidentOpener(id, state.residents[id].activity, (state.conversations[id] ?? []).length > 0);
+    el('conversation-context').textContent = state.residents[id].heard.length ? 'You have spoken before.' : residents[id].role;
     renderConversation(id);
     el('conversation-status').textContent = '';
     const topics = el('topics'); topics.replaceChildren();
@@ -127,7 +129,7 @@ export function startCityGame(): void {
     try {
       const result = await choose({ kind: 'dialogue', actorId: id, epoch, utterance, state, options });
       if (conversationId !== id || ticket !== conversationTicket || state.residents[id].epoch !== epoch) return;
-      let reply = result.choiceId === 'clarify' ? clarifications[id] : responses[result.choiceId].text;
+      let reply = result.choiceId === 'clarify' ? getCasualReply(id, utterance, (state.conversations[id] ?? []).length) : responses[result.choiceId].text;
       let chatFailed = false;
       if (chatMode !== 'unavailable') {
         el('conversation-status').textContent = 'WAITING FOR REPLY…';
@@ -143,8 +145,8 @@ export function startCityGame(): void {
       el('conversation-line').textContent = reply;
       state = recordDialogueExchange(state, id, utterance, reply, result.choiceId); save(); updateHud(); renderConversation(id);
       question.value = '';
-      el('conversation-context').textContent = `${residents[id].name} · ${state.residents[id].activity.toUpperCase()} · ${Math.round(result.elapsedMs)} MS`;
-      el('conversation-status').textContent = chatFailed ? 'OPENAI CHAT UNAVAILABLE · SOURCE ACCOUNT SHOWN' : result.choiceId === 'clarify' ? 'KEEP TALKING OR ASK ABOUT A SPECIFIC LEAD' : 'SOURCE ADDED TO YOUR JOURNAL [J]';
+      el('conversation-context').textContent = `${residents[id].name} · ${residents[id].role.toUpperCase()}`;
+      el('conversation-status').textContent = chatFailed ? 'VOICE LINK INTERRUPTED · ACCOUNT RECOVERED' : result.choiceId === 'clarify' ? 'KEEP TALKING OR ASK ABOUT A SPECIFIC LEAD' : 'SOURCE ADDED TO YOUR JOURNAL [J]';
     } catch { if (ticket === conversationTicket) el('conversation-status').textContent = 'JEV LINK LOST · CLOSE AND RETRY'; }
     finally { el('question-form').removeAttribute('aria-busy'); }
   }

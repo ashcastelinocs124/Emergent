@@ -60,6 +60,8 @@ test('a resident keeps a multi-turn chat when the explorer walks away and return
   await expect(page.locator('#conversation-history')).toContainText('workshop cabinet');
   await page.locator('#question').fill('How are you doing?'); await page.locator('#question-form button').click();
   await expect(page.locator('#conversation-history .chat-turn')).toHaveCount(4);
+  await expect(page.locator('#conversation-history')).toContainText('motor');
+  await expect(page.locator('#speaker-portrait')).toHaveAttribute('src', '/portraits/mara.jpg');
   await page.locator('#conversation-close').click();
   await page.keyboard.press('e');
   await expect(page.locator('#conversation-history .chat-turn')).toHaveCount(4);
@@ -71,7 +73,7 @@ test('a chat outage shows the selected sourced account and keeps the repair clue
   await page.goto('/?debug=1'); await page.locator('#enter').click();
   await aim(page, 'mara', -20, -9, -20, -12); await page.keyboard.press('e');
   await page.locator('#question').fill('Where is a power cell?'); await page.locator('#question-form button').click();
-  await expect(page.locator('#conversation-status')).toContainText('OPENAI CHAT UNAVAILABLE');
+  await expect(page.locator('#conversation-status')).toContainText('VOICE LINK INTERRUPTED');
   await expect(page.locator('#conversation-history')).toContainText('workshop cabinet');
   expect(await page.evaluate(() => window.__cityDebug.getState().claims.some(claim => claim.id === 'mechanic-power'))).toBe(true);
   await page.unroute('**/api/city-chat');

@@ -50,6 +50,7 @@ describe('resident chat', () => {
   it('allows casual conversation while filtering invented repair leads', () => {
     const casual: CityChatInput = { ...input, anchorId: 'clarify', utterance: 'How has your day been?' };
     expect(chooseGroundedReply(casual, 'Long shift. Glad someone stopped to talk.').mode).toBe('openai');
+    expect(chooseGroundedReply(casual, 'Long shift at the workshop. Glad someone stopped to talk.').mode).toBe('openai');
     expect(chooseGroundedReply(casual, 'The relay is under the red switch at the depot.').mode).toBe('authored');
   });
 });

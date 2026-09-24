@@ -3,7 +3,10 @@
 
 /* Conversation stays on the street: the speaker and city remain visible above the subtitle deck. */
 #conversation.panel-layer{place-items:end center;background:linear-gradient(180deg,#07151a00 10%,#07151a24 46%,#07151ae8 100%);backdrop-filter:none;padding:0 3vw 3.5vh}
-#conversation .conversation-panel{width:min(860px,94vw);padding:18px 24px 16px;background:#0d1d22e8;border-color:#b4c8bf8a;box-shadow:0 15px 50px #020b10a8;backdrop-filter:blur(12px)}
+#conversation .conversation-panel{position:relative;width:min(860px,94vw);padding:18px 24px 16px;background:#0d1d22e8;border-color:#b4c8bf8a;box-shadow:0 15px 50px #020b10a8;backdrop-filter:blur(12px)}
+.resident-portrait{position:absolute;left:-196px;bottom:-1px;width:180px;height:224px;margin:0;overflow:hidden;border:1px solid #b4c8bf8a;background:#10252a;box-shadow:0 15px 45px #020b10aa}
+.resident-portrait img{display:block;width:100%;height:100%;object-fit:cover;object-position:center 35%}
+.resident-portrait figcaption{position:absolute;bottom:0;left:0;right:0;padding:7px 9px;background:#0b1b20d9;color:#e0e9db;font:9px 'DM Mono',monospace;letter-spacing:.1em}
 #conversation .conversation-panel header{padding-bottom:10px}
 #conversation .conversation-panel h2{font-size:34px;margin-top:4px}
 #conversation .conversation-body{padding:9px 0;min-height:65px}
@@ -18,4 +21,5 @@
 #conversation .conversation-panel #topics{margin-bottom:10px}
 #conversation .conversation-panel #conversation-status{margin-top:8px;min-height:14px}
 #chat-mode{font:9px 'DM Mono',monospace;letter-spacing:.09em;color:#b4c7bc;padding-top:8px;border-top:1px solid #96b5a047}
-@media(max-width:650px){#conversation.panel-layer{padding:0 2vw 2vh}#conversation .conversation-panel{padding:14px}#conversation .conversation-panel h2{font-size:27px}.conversation-history{max-height:125px}.chat-turn{max-width:95%}}
+@media(max-width:1250px){.resident-portrait{left:auto;right:126px;bottom:auto;top:10px;width:82px;height:82px}.resident-portrait figcaption{display:none}}
+@media(max-width:650px){#conversation.panel-layer{padding:0 2vw 2vh}#conversation .conversation-panel{padding:14px}#conversation .conversation-panel h2{font-size:27px}.conversation-history{max-height:125px}.chat-turn{max-width:95%}.resident-portrait{width:54px;height:54px;right:110px;top:7px}}
