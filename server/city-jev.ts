@@ -1,6 +1,6 @@
 import { TypeSafeClient, choice, type JsonValue } from '@typesafe-ai/sdk';
 import { isAuthoredOption } from '../src/city/decisions';
-import { residentIds, residents } from '../src/city/content';
+import { residentIds, residents, responses } from '../src/city/content';
 import type { CityChoiceInput, CityChoiceResult } from '../src/city/model';
 export type CityEvaluator = (request: { state: Record<string, unknown>; questions: { intent: { instructions: string; criteria: Record<string, string> } } }) => Promise<{ answers: { intent: { choice: string; confidence: number; probabilities: Record<string, number> } }; usage: { input_tokens: number; output_tokens: number } }>;
 let client: TypeSafeClient | undefined;
@@ -33,7 +33,11 @@ export async function requestCityChoice(input: CityChoiceInput, evaluate: CityEv
     role: input.actorId in residents ? residents[input.actorId as keyof typeof residents].role : 'ship computer',
     activity: personal?.activity ?? 'analyze', memory: personal?.heard ?? [],
     playerNearby: personal ? Math.hypot(personal.position.x - input.state.player.x, personal.position.z - input.state.player.z) < 10 : false };
-  if (input.kind === 'dialogue') snapshot.utterance = input.utterance ?? '';
+  if (input.kind === 'dialogue') {
+    snapshot.utterance = input.utterance ?? '';
+    const previous = [...(input.state.conversations?.[input.actorId as keyof typeof input.state.conversations] ?? [])].reverse().find(turn => turn.speaker === 'resident' && turn.anchorId)?.anchorId;
+    if (previous && responses[previous]) snapshot.previousTopic = responses[previous].text;
+  }
   if (input.kind === 'lead') Object.assign(snapshot, { claims: input.state.claims.map(claim => ({ speaker: claim.speakerId, material: claim.materialId, location: claim.locationId })),
     assumptions: input.state.assumptions, observations: input.state.observations, inventory: input.state.inventory, installed: input.state.installed });
   const request = { state: snapshot,

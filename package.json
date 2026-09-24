@@ -19,6 +19,7 @@
   "dependencies": {
     "@typesafe-ai/sdk": "^0.6.0",
     "express": "^5.2.1",
+    "openai": "^7.23.0",
     "three": "^0.186.0"
   },
   "devDependencies": {

@@ -7,7 +7,7 @@ function assess(claims: Claim[], materialId: MaterialId, locationId: LocationId,
   return supporting ? (conflicting ? 'disputed' : 'supported') : 'possible';
 }
 export function createCityState(): CityState {
-  return { version: 1, time: 0, player: { x: 7, z: -38 }, claims: [], statements: [], observations: [], assumptions: {}, inventory: [], installed: [],
+  return { version: 1, time: 0, player: { x: 7, z: -23 }, claims: [], statements: [], observations: [], conversations: { mara: [], eli: [], sora: [], dev: [] }, assumptions: {}, inventory: [], installed: [],
     access: { workshop: false, 'salvage-yard': true, 'transit-depot': false }, lead: null, launched: false,
     residents: Object.fromEntries(residentIds.map(id => [id, { activity: 'work', activityStreak: 0, epoch: 0, nextDecisionAt: 1, heard: [], position: { x: residents[id].x, z: residents[id].z } }])) as unknown as CityState['residents'] };
 }

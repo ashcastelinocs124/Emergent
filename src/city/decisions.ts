@@ -15,7 +15,10 @@ export function getValidActivities(id: ResidentId, state: CityState): CityChoice
 export function getDialogueOptions(id: ResidentId, utterance: string, state: CityState): CityChoiceOption[] {
   const words: string[] = utterance.toLowerCase().match(/[a-z]+/g) ?? [];
   const matched = Object.entries(responses).filter(([responseId, reply]) => reply.speakerId === id && (responseId !== 'mechanic-power' || !state.residents[id].heard.includes('mechanic-power')) && (!reply.after || state.residents[id].heard.includes(reply.after)) && reply.keywords.some(keyword => words.includes(keyword)));
-  const options = matched.map(([responseId, reply]) => ({ id: responseId, description: `${reply.text}${state.residents[id].heard.includes(responseId) ? ' You have said this before.' : ''}` }));
+  const lastAnchor = [...(state.conversations?.[id] ?? [])].reverse().find(turn => turn.speaker === 'resident' && turn.anchorId)?.anchorId;
+  const followsTopic = matched.length === 0 && /^(where|which|tell me more|what do you mean)/i.test(utterance.trim()) && /\b(it|that|there|more)\b/i.test(utterance);
+  if (followsTopic && lastAnchor && responses[lastAnchor]?.speakerId === id) matched.push([lastAnchor, responses[lastAnchor]]);
+  const options = matched.map(([responseId, reply]) => ({ id: responseId, description: `${reply.text}${state.residents[id].heard.includes(responseId) ? ' You have said this before; answer the follow-up naturally.' : ''}` }));
   return [...options, { id: 'clarify', description: 'The question is unclear or unrelated; ask for a specific topic.' }];
 }
 export function getAvailableLeads(state: CityState): CityChoiceOption[] {

@@ -16,8 +16,10 @@ it('round trips evidence and resident memory under a separate city key', () => {
 it('recovers a city save written before conversation statements and activity streaks existed', () => {
   const old = createCityState() as Partial<ReturnType<typeof createCityState>>;
   delete old.statements;
+  delete old.conversations;
   const store = { getItem: () => JSON.stringify(old), setItem: () => {} };
   const recovered = loadCitySave(store);
   expect(recovered?.statements).toEqual([]);
   expect(recovered?.residents.mara.activityStreak).toBe(0);
+  expect(recovered?.conversations.mara).toEqual([]);
 });

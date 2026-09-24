@@ -6,7 +6,7 @@ import { startCityAudio, uiBeep } from './audio';
 import { materials, materialIds, residents, residentIds, responses, clarifications } from './content';
 import { createCityState, collectMaterial, installMaterial, isLaunchReady, setAssumption, recordObservation } from './state';
 import { getDialogueOptions, getValidActivities, getAvailableLeads } from './decisions';
-import { applyDialogueChoice } from './conversation';
+import { recordDialogueExchange } from './conversation';
 import { applyResidentActivity } from './activities';
 import { applyLeadChoice } from './leads';
 import { loadCitySave, writeCitySave, CITY_SAVE_KEY } from './save';
@@ -32,7 +32,7 @@ export function startCityGame(): void {
   const residentViews = createResidentViews(scene); const materialViews = createMaterialViews(scene);
   let entered = false, conversationId: ResidentId | null = null, conversationTicket = 0, leadTicket = 0;
   let target: Target | null = null, lastSave = 0, lastHud = 0, lastActivityTick = 0, toastUntil = 0;
-  let linkOkay = true; const pendingActivities = new Set<ResidentId>();
+  let linkOkay = true, chatMode: 'ready' | 'simulated' | 'unavailable' = 'unavailable'; const pendingActivities = new Set<ResidentId>();
   const debug = new URLSearchParams(location.search).has('debug');
   const toast = (message: string) => { el('toast').textContent = message; el('toast').classList.add('visible'); toastUntil = performance.now() + 3500; uiBeep(); };
   const save = () => writeCitySave(localStorage, state);
@@ -48,11 +48,12 @@ export function startCityGame(): void {
     } catch (error) { setLink(false); throw error; }
     finally { clearTimeout(deadline); }
   }
-  void fetch('/api/health').then(response => response.json()).then((health: { mode?: string; status?: string }) => {
-    el('mode-badge').hidden = health.mode !== 'fake'; setLink(health.status === 'ready');
+  const setChatMode = (mode: typeof chatMode) => { chatMode = mode; el('chat-mode').textContent = mode === 'ready' ? 'OPENAI CONVERSATION · LIVE' : mode === 'simulated' ? 'CONVERSATION · TEST SIMULATION' : 'OPENAI CHAT UNAVAILABLE · RECORDED ACCOUNTS'; };
+  void fetch('/api/health').then(response => response.json()).then((health: { mode?: string; status?: string; chat?: typeof chatMode }) => {
+    el('mode-badge').hidden = health.mode !== 'fake'; setLink(health.status === 'ready'); setChatMode(health.chat ?? 'unavailable');
   }).catch(() => setLink(false));
   el<HTMLButtonElement>('link-retry').addEventListener('click', async () => {
-    try { const response = await fetch('/api/health'); const health = await response.json() as { status: string }; setLink(response.ok && health.status === 'ready'); if (linkOkay) toast('Decision link restored'); } catch { setLink(false); }
+    try { const response = await fetch('/api/health'); const health = await response.json() as { status: string; chat?: typeof chatMode }; setLink(response.ok && health.status === 'ready'); setChatMode(health.chat ?? 'unavailable'); if (linkOkay) toast('Decision link restored'); } catch { setLink(false); }
   });
   const distance = (x: number, z: number) => Math.hypot(camera.position.x - x, camera.position.z - z);
   const candidates = (): Target[] => [
@@ -83,7 +84,7 @@ export function startCityGame(): void {
     }
     el('inventory').textContent = state.inventory.length ? state.inventory.map(materialName).join(' · ').toUpperCase() : 'EMPTY';
     el('objective').textContent = isLaunchReady(state) ? 'LAUNCH THE SHIP' : `REPAIR THE SHIP · ${state.installed.length}/3`;
-    el('objective-detail').textContent = state.claims.length ? 'Compare the stories in your journal. Find each part, then return to the ship.' : 'Talk to residents. Ask where the missing materials are.';
+    el('objective-detail').textContent = isLaunchReady(state) ? 'All systems restored. Return to the ship console and launch.' : state.claims.length ? 'Compare the stories in your journal. Find each part, then return to the ship.' : 'Talk to residents. Ask where the missing materials are.';
     el('current-lead').textContent = state.lead && state.lead !== 'seek-more-evidence' ? `SHIP COMPUTER: ${state.lead.replace('@', ' / ').toUpperCase()}` : 'NO LEAD SELECTED';
     const minutes = 42 + Math.floor(state.time / 60), hour = 18 + Math.floor(minutes / 60);
     el('clock').textContent = `${String(hour % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')} / CITY TIME`;
@@ -91,12 +92,25 @@ export function startCityGame(): void {
     el('location-label').textContent = z < -23 && Math.abs(x) < 13 ? 'SOUTH CRASH LOT' : x < -17 && Math.abs(z) < 18 ? 'VOSS WORKSHOP' : x > 17 && z < 0 ? 'SALVAGE YARD' : x > 15 && z > 15 ? 'TRANSIT DEPOT' : 'SOUTH DISTRICT';
   }
   function closeConversation(): void { conversationId = null; conversationTicket++; el('conversation').hidden = true; el<HTMLInputElement>('question').value = ''; }
+  function renderConversation(id: ResidentId): void {
+    const history = el('conversation-history'); history.replaceChildren();
+    const turns = state.conversations[id] ?? [];
+    for (const turn of turns) {
+      const row = document.createElement('div'); row.className = `chat-turn ${turn.speaker}`;
+      const who = document.createElement('small'); who.textContent = turn.speaker === 'player' ? 'YOU' : residents[id].name.toUpperCase();
+      const words = document.createElement('p'); words.textContent = turn.text;
+      row.append(who, words); history.appendChild(row);
+    }
+    el('conversation').classList.toggle('has-history', turns.length > 0);
+    history.scrollTop = history.scrollHeight;
+  }
   function openConversation(id: ResidentId): void {
     if (!linkOkay) { toast('Jev link unavailable. Retry to talk.'); return; }
     conversationId = id; conversationTicket++; if (document.pointerLockElement) void document.exitPointerLock();
     el('conversation').hidden = false; el('speaker-name').textContent = residents[id].name; el('speaker-role').textContent = residents[id].role.toUpperCase();
     el('conversation-line').textContent = `${residents[id].name} looks at your helmet, waiting.`;
     el('conversation-context').textContent = state.residents[id].heard.length ? 'You have spoken before. They remember this conversation.' : 'A first encounter.';
+    renderConversation(id);
     el('conversation-status').textContent = '';
     const topics = el('topics'); topics.replaceChildren();
     for (const topic of residents[id].topics) {
@@ -113,10 +127,24 @@ export function startCityGame(): void {
     try {
       const result = await choose({ kind: 'dialogue', actorId: id, epoch, utterance, state, options });
       if (conversationId !== id || ticket !== conversationTicket || state.residents[id].epoch !== epoch) return;
-      if (result.choiceId === 'clarify') el('conversation-line').textContent = clarifications[id];
-      else { el('conversation-line').textContent = responses[result.choiceId].text; state = applyDialogueChoice(state, id, result.choiceId, epoch); save(); updateHud(); }
+      let reply = result.choiceId === 'clarify' ? clarifications[id] : responses[result.choiceId].text;
+      let chatFailed = false;
+      if (chatMode !== 'unavailable') {
+        el('conversation-status').textContent = 'WAITING FOR REPLY…';
+        try {
+          const response = await fetch('/api/city-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ residentId: id, utterance, anchorId: result.choiceId, history: (state.conversations[id] ?? []).slice(-12) }) });
+          if (!response.ok) throw new Error(`Chat service ${response.status}`);
+          const chat = await response.json() as { reply: string };
+          if (!chat.reply?.trim() || chat.reply.length > 900) throw new Error('Invalid chat reply');
+          reply = chat.reply.trim();
+        } catch { chatFailed = true; }
+      }
+      if (conversationId !== id || ticket !== conversationTicket || state.residents[id].epoch !== epoch) return;
+      el('conversation-line').textContent = reply;
+      state = recordDialogueExchange(state, id, utterance, reply, result.choiceId); save(); updateHud(); renderConversation(id);
+      question.value = '';
       el('conversation-context').textContent = `${residents[id].name} · ${state.residents[id].activity.toUpperCase()} · ${Math.round(result.elapsedMs)} MS`;
-      el('conversation-status').textContent = result.choiceId === 'clarify' ? 'TRY A MORE SPECIFIC QUESTION' : 'SOURCE ADDED TO YOUR JOURNAL [J]';
+      el('conversation-status').textContent = chatFailed ? 'OPENAI CHAT UNAVAILABLE · SOURCE ACCOUNT SHOWN' : result.choiceId === 'clarify' ? 'KEEP TALKING OR ASK ABOUT A SPECIFIC LEAD' : 'SOURCE ADDED TO YOUR JOURNAL [J]';
     } catch { if (ticket === conversationTicket) el('conversation-status').textContent = 'JEV LINK LOST · CLOSE AND RETRY'; }
     finally { el('question-form').removeAttribute('aria-busy'); }
   }
@@ -213,7 +241,7 @@ export function startCityGame(): void {
     const now = performance.now(), dt = Math.min((now - previous) / 1000, .07); previous = now;
     if (entered && el('conversation').hidden && el('journal').hidden && !state.launched) { const before = camera.position.clone(); controls.update(dt); if (habitat.blocks(camera.position.x, camera.position.z)) { camera.position.x = before.x; camera.position.z = before.z; } }
     if (entered && !state.launched) state.time += dt; state.player = { x: camera.position.x, z: camera.position.z };
-    residentViews.sync(state, state.time); materialViews.sync(state, state.time);
+    residentViews.sync(state, state.time, conversationId); materialViews.sync(state, state.time);
     target = selectTarget(); const prompt = el('interaction'); prompt.textContent = target && entered && el('conversation').hidden && el('journal').hidden ? `[E] ${target.label}` : ''; prompt.classList.toggle('visible', !!prompt.textContent);
     if (now > toastUntil) el('toast').classList.remove('visible');
     if (state.time - lastHud > .3) { updateHud(); lastHud = state.time; }

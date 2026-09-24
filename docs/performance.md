@@ -1,5 +1,7 @@
 # New Eden city performance notes
 
+After the realism pass added locally bundled 1K photographic surfaces and street detail, a fresh 1440 × 900 headless Chromium software-rendered 50-frame sample measured 50.1 ms median and 66.8 ms p95. This is similar to the earlier optimized street sample, but remains below 30 fps in software rendering. A hardware GPU benchmark is still needed; the 2.3 MB of bundled photographs load locally and remain available offline.
+
 A 1440 × 900 headless Chromium software-rendered check on 2026-09-23 sampled 49 frame intervals after the three-part repair path: 66.7 ms median and 133.4 ms p95. After batching facade windows and reducing the shadow map, a second 50-interval street sample measured 50.0 ms median and 66.7 ms p95. These software-rendered figures remain below a 30 fps floor and do not predict performance on a recent desktop GPU. Crowd meshes and other street props are still separate draws; a hardware benchmark and further batching remain open. The TypeScript production build succeeds; its single Three.js-heavy JavaScript chunk is about 581 kB before compression and 149 kB gzip.
 
 ## Previous wilderness prototype

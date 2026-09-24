@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { requestCityChoice, fakeCityChoice, validateCityChoiceInput } from './city-jev';
+import { requestCityChat, fakeCityChat, validateCityChatInput, type CityChatInput, type CityChatResult } from './city-chat';
 
 const ACTIONS = new Set(['HUNT', 'FLEE', 'HIDE', 'EAT', 'FOLLOW', 'DEFEND', 'MATE', 'EXPLORE']);
 
@@ -30,7 +31,7 @@ function isDecisionInput(value: unknown): value is DecisionInput {
   }
 }
 
-export function createApp(decide: (input: DecisionInput) => Promise<DecisionResult>): Express {
+export function createApp(decide: (input: DecisionInput) => Promise<DecisionResult>, chat: (input: CityChatInput) => Promise<CityChatResult> = input => process.env.JEV_MODE === 'fake' ? Promise.resolve(fakeCityChat(input)) : requestCityChat(input)): Express {
   const app = express();
   app.use(express.json({ limit: '64kb' }));
   app.get('/api/health', (_request, response) => {
@@ -38,7 +39,19 @@ export function createApp(decide: (input: DecisionInput) => Promise<DecisionResu
       response.status(503).json({ status: 'unavailable', mode: 'live', error: 'TYPESAFE_API_KEY is not configured' });
       return;
     }
-    response.json({ status: 'ready', mode: process.env.JEV_MODE === 'fake' ? 'fake' : 'live' });
+    response.json({ status: 'ready', mode: process.env.JEV_MODE === 'fake' ? 'fake' : 'live', chat: process.env.JEV_MODE === 'fake' ? 'simulated' : process.env.OPENAI_API_KEY ? 'ready' : 'unavailable' });
+  });
+  app.post('/api/city-chat', async (request, response) => {
+    if (!validateCityChatInput(request.body)) { response.status(400).json({ error: 'Invalid city chat request' }); return; }
+    try {
+      const result = await chat(request.body);
+      if (!result.reply?.trim() || result.reply.length > 900) { response.status(503).json({ error: 'Invalid city chat reply' }); return; }
+      response.json(result);
+    } catch (error) {
+      const failure = error as { name?: string; status?: number; code?: string };
+      console.warn('City chat failed', { name: failure?.name ?? 'UnknownError', status: failure?.status, code: failure?.code });
+      response.status(503).json({ error: 'City chat unavailable' });
+    }
   });
   app.post('/api/city-choice', async (request, response) => {
     if (!validateCityChoiceInput(request.body)) { response.status(400).json({ error: 'Invalid city choice request' }); return; }
