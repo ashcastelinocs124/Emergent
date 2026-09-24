@@ -12,6 +12,7 @@ test('the explorer hears city claims, records a theory, repairs the ship, and es
   await page.getByRole('button', { name: 'ENTER THE CITY' }).click();
   await aim(page, 'mara', -20, -9, -20, -12); await page.keyboard.press('e');
   await expect(page.getByRole('dialog', { name: 'Conversation' })).toBeVisible();
+  await expect(page.locator('#question')).toHaveValue('');
   await page.locator('#question').fill('Where is a power cell?');
   await page.getByRole('button', { name: 'SEND', exact: true }).click();
   await expect(page.locator('#conversation-line')).toContainText('workshop cabinet');

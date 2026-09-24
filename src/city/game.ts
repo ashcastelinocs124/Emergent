@@ -225,7 +225,7 @@ export function startCityGame(): void {
     if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return;
     if (event.code === 'KeyJ') { if (el('journal').hidden) openJournal(); else closeJournal(); return; }
     if (!el('conversation').hidden || !el('journal').hidden || !entered) return;
-    if (event.code === 'KeyE') interact();
+    if (event.code === 'KeyE') { event.preventDefault(); interact(); }
   });
   window.addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
   if (debug) Object.assign(window, { __cityDebug: { getState: () => state, getTarget: () => target, teleport: (x: number, z: number, lookX: number, lookZ: number) => controls.teleport(x, z, new THREE.Vector3(lookX, 1.5, lookZ)) } });
