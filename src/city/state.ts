@@ -1,5 +1,6 @@
 import { materialIds, materials, residentIds, residents, responses } from './content';
 import type { CityState, Claim, LocationId, MaterialId } from './model';
+import { crashSite } from './geography';
 const distance = (a: { x: number; z: number }, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z);
 function assess(claims: Claim[], materialId: MaterialId, locationId: LocationId, evidenceIds: string[]): 'possible' | 'supported' | 'disputed' {
   const supporting = claims.some(claim => evidenceIds.includes(claim.id) && claim.materialId === materialId && claim.locationId === locationId);
@@ -7,9 +8,20 @@ function assess(claims: Claim[], materialId: MaterialId, locationId: LocationId,
   return supporting ? (conflicting ? 'disputed' : 'supported') : 'possible';
 }
 export function createCityState(): CityState {
-  return { version: 1, time: 0, player: { x: 7, z: -23 }, claims: [], statements: [], observations: [], conversations: { mara: [], eli: [], sora: [], dev: [] }, assumptions: {}, inventory: [], installed: [],
+  return { version: 1, time: 0, player: { ...crashSite.aboard }, shipStage: 'aboard', hasExitedShip: false, claims: [], statements: [], observations: [], conversations: { mara: [], eli: [], sora: [], dev: [] }, assumptions: {}, inventory: [], installed: [],
     access: { workshop: false, 'salvage-yard': true, 'transit-depot': false }, lead: null, launched: false,
     residents: Object.fromEntries(residentIds.map(id => [id, { activity: 'work', activityStreak: 0, epoch: 0, nextDecisionAt: 1, heard: [], position: { x: residents[id].x, z: residents[id].z } }])) as unknown as CityState['residents'] };
+}
+export function exitShip(state: CityState): CityState {
+  return state.shipStage === 'aboard' ? { ...state, shipStage: 'outside', hasExitedShip: true, player: { ...crashSite.exit } } : state;
+}
+export function enterShip(state: CityState): CityState {
+  if (state.shipStage !== 'outside' || state.launched || distance(state.player, crashSite.hatch) > 5.2) return state;
+  return { ...state, shipStage: 'aboard', player: { ...crashSite.aboard } };
+}
+export function toggleShipCloak(state: CityState): CityState {
+  if (state.shipStage === 'aboard' || state.launched || distance(state.player, crashSite.cloak) > 5.2) return state;
+  return { ...state, shipStage: state.shipStage === 'hidden' ? 'outside' : 'hidden' };
 }
 export function recordClaim(state: CityState, responseId: string): CityState {
   const response = responses[responseId];
@@ -40,7 +52,7 @@ export function collectMaterial(state: CityState, id: MaterialId): CityState {
   return canCollectMaterial(state, id) ? { ...state, inventory: [...state.inventory, id] } : state;
 }
 export function installMaterial(state: CityState, id: MaterialId): CityState {
-  if (!state.inventory.includes(id) || distance(state.player, { x: 0, z: -27 }) > 7) return state;
+  if (state.shipStage !== 'outside' || !state.inventory.includes(id) || distance(state.player, crashSite.console) > 7) return state;
   return { ...state, inventory: state.inventory.filter(candidate => candidate !== id), installed: [...state.installed, id] };
 }
 export function isLaunchReady(state: CityState): boolean { return materialIds.every(id => state.installed.includes(id)); }

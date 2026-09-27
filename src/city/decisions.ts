@@ -2,9 +2,9 @@ import { residents, responses, materials } from './content';
 import type { CityChoiceInput, CityChoiceOption, CityState, ResidentId } from './model';
 export const activityIds = ['work', 'walk', 'watch', 'rest'] as const;
 const routines: Record<ResidentId, Record<(typeof activityIds)[number], string>> = {
-  mara: { work: 'repair a motor at Voss Auto', walk: 'walk the workshop frontage', watch: 'inspect the crash lot from the curb', rest: 'take a break outside the workshop' },
+  mara: { work: 'repair a motor at Voss Auto', walk: 'walk the workshop frontage', watch: 'watch traffic toward the southern approach', rest: 'take a break outside the workshop' },
   eli: { work: 'sort deliveries by the crossing', walk: 'make a short courier round', watch: 'check the traffic and strangers', rest: 'pause at the transit bench' },
-  sora: { work: 'sort salvage at the yard', walk: 'search the open scrap rows', watch: 'keep an eye on the crash lot', rest: 'rest by the salvage gate' },
+  sora: { work: 'sort salvage at the yard', walk: 'search the open scrap rows', watch: 'watch the southern approach', rest: 'rest by the salvage gate' },
   dev: { work: 'maintain the depot equipment', walk: 'inspect the platform edge', watch: 'watch the arriving traffic', rest: 'take a break beside the depot' },
 };
 export function getValidActivities(id: ResidentId, state: CityState): CityChoiceOption[] {

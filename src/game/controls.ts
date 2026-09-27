@@ -3,7 +3,7 @@ import * as THREE from 'three';
 export interface Controls {
   update(dt: number): void;
   readonly position: THREE.Vector3;
-  readonly isHidden: boolean;
+  readonly isSprinting: boolean;
   teleport(x: number, z: number, target: THREE.Vector3): void;
   dispose(): void;
 }
@@ -35,7 +35,7 @@ export function createControls(
 
   return {
     get position() { return camera.position; },
-    get isHidden() { return keys.has('ShiftLeft') || keys.has('ShiftRight'); },
+    get isSprinting() { return keys.has('ShiftLeft') || keys.has('ShiftRight'); },
     teleport(x, z, target) {
       camera.position.set(x, heightAt(x, z) + 1.75, z);
       const delta = target.clone().sub(camera.position).normalize();
@@ -50,10 +50,10 @@ export function createControls(
       const direction = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
       const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
       const move = direction.multiplyScalar(-forward).addScaledVector(right, side);
-      if (move.lengthSq() > 0) move.normalize().multiplyScalar((this.isHidden ? 2 : 5.2) * Math.min(dt, .05));
-      camera.position.x = THREE.MathUtils.clamp(camera.position.x + move.x, -146, 146);
-      camera.position.z = THREE.MathUtils.clamp(camera.position.z + move.z, -146, 146);
-      const targetY = heightAt(camera.position.x, camera.position.z) + (this.isHidden ? 1.12 : 1.75);
+      if (move.lengthSq() > 0) move.normalize().multiplyScalar((this.isSprinting ? 11 : 5.2) * Math.min(dt, .05));
+      camera.position.x += move.x;
+      camera.position.z += move.z;
+      const targetY = heightAt(camera.position.x, camera.position.z) + 1.75;
       camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetY, Math.min(1, dt * 12));
       camera.rotation.order = 'YXZ';
       camera.rotation.set(pitch, yaw, 0);

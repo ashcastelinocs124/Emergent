@@ -2,18 +2,20 @@ import * as THREE from 'three';
 import { createControls } from '../game/controls';
 import { createCityHabitat } from './habitat';
 import { createResidentViews, createMaterialViews } from './residents';
+import { drawCityMinimap } from './minimap';
 import { startCityAudio, uiBeep } from './audio';
 import { materials, materialIds, residents, residentIds, responses } from './content';
 import { getCasualReply, getResidentOpener } from './personas';
-import { createCityState, collectMaterial, installMaterial, isLaunchReady, setAssumption, recordObservation } from './state';
+import { createCityState, enterShip, exitShip, toggleShipCloak, collectMaterial, installMaterial, isLaunchReady, setAssumption, recordObservation } from './state';
 import { getDialogueOptions, getValidActivities, getAvailableLeads } from './decisions';
 import { recordDialogueExchange } from './conversation';
 import { applyResidentActivity } from './activities';
 import { applyLeadChoice } from './leads';
 import { loadCitySave, writeCitySave, CITY_SAVE_KEY } from './save';
+import { crashSite, isCrashOutskirts } from './geography';
 import type { CityChoiceInput, CityChoiceResult, CityState, MaterialId, ResidentId, LocationId } from './model';
 
-type Target = { type: 'resident' | 'material' | 'switch' | 'ship'; id: string; label: string; x: number; z: number };
+type Target = { type: 'resident' | 'material' | 'switch' | 'ship' | 'cloak' | 'hatch'; id: string; label: string; x: number; z: number };
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const locName: Record<LocationId, string> = { workshop: 'Voss Workshop', 'salvage-yard': 'Salvage Yard', 'transit-depot': 'Transit Depot' };
 const materialName = (id: MaterialId) => materials[id].name;
@@ -33,6 +35,16 @@ export function startCityGame(): void {
   const residentViews = createResidentViews(scene); const materialViews = createMaterialViews(scene);
   let entered = false, conversationId: ResidentId | null = null, conversationTicket = 0, leadTicket = 0;
   let target: Target | null = null, lastSave = 0, lastHud = 0, lastActivityTick = 0, toastUntil = 0;
+  const syncEntry = () => {
+    const departed = state.shipStage !== 'aboard';
+    entry.classList.toggle('departed', departed);
+    el('entry-title').innerHTML = departed ? 'CITY<br><em>PAUSED</em>' : state.hasExitedShip ? 'SHIP<br><em>COCKPIT</em>' : 'CRASH<br><em>LANDED</em>';
+    el('entry-subtitle').textContent = departed ? 'Your search continues.' : state.hasExitedShip ? `${state.installed.length} of 3 flight systems restored.` : 'The city is ahead. The ship is broken.';
+    el('entry-copy').textContent = departed ? 'Follow your leads, talk to residents, recover the missing parts, and return to the wreck beyond the southern approach.' : state.hasExitedShip ? 'The hatch is ready. Step outside to continue your search, install any parts at the exterior repair console, or launch once every system is restored.' : 'You wake inside your damaged spacecraft beyond New Eden. Open the hatch, conceal the wreck, then follow the road north to ask people where to find the parts needed to escape.';
+    el('enter').textContent = departed ? 'RESUME CITY' : 'EXIT SHIP';
+    const instruments = entry.querySelectorAll<HTMLElement>('.cockpit-instruments b');
+    materialIds.forEach((id, index) => { instruments[index].textContent = state.installed.includes(id) ? 'ONLINE' : 'OFFLINE'; instruments[index].classList.toggle('online', state.installed.includes(id)); });
+  };
   let linkOkay = true, chatMode: 'ready' | 'simulated' | 'unavailable' = 'unavailable'; const pendingActivities = new Set<ResidentId>();
   const debug = new URLSearchParams(location.search).has('debug');
   const toast = (message: string) => { el('toast').textContent = message; el('toast').classList.add('visible'); toastUntil = performance.now() + 3500; uiBeep(); };
@@ -57,12 +69,13 @@ export function startCityGame(): void {
     try { const response = await fetch('/api/health'); const health = await response.json() as { status: string; chat?: typeof chatMode }; setLink(response.ok && health.status === 'ready'); setChatMode(health.chat ?? 'unavailable'); if (linkOkay) toast('Decision link restored'); } catch { setLink(false); }
   });
   const distance = (x: number, z: number) => Math.hypot(camera.position.x - x, camera.position.z - z);
-  const candidates = (): Target[] => [
+  const candidates = (): Target[] => state.shipStage === 'aboard' ? [] : [
     ...residentIds.map(id => ({ type: 'resident' as const, id, label: `TALK TO ${residents[id].name.toUpperCase()}`, x: state.residents[id].position.x, z: state.residents[id].position.z })),
     ...materialIds.filter(id => !state.inventory.includes(id) && !state.installed.includes(id)).map(id => ({ type: 'material' as const, id, label: `TAKE ${materialName(id).toUpperCase()}`, x: materials[id].x, z: materials[id].z })),
     { type: 'switch', id: 'workshop', label: 'PULL WORKSHOP LEVER', x: -17, z: -8 },
     { type: 'switch', id: 'transit-depot', label: 'RELEASE DEPOT CAGE', x: 17, z: 28 },
-    { type: 'ship', id: 'ship', label: 'USE SHIP CONSOLE', x: 0, z: -27 },
+    { type: 'cloak', id: 'cloak', label: state.shipStage === 'hidden' ? 'REVEAL SHIP' : 'CONCEAL SHIP', ...crashSite.cloak },
+    ...(state.shipStage === 'outside' ? [{ type: 'ship' as const, id: 'ship', label: 'USE SHIP CONSOLE', ...crashSite.console }, { type: 'hatch' as const, id: 'hatch', label: 'ENTER SHIP', ...crashSite.hatch }] : []),
   ];
   const direction = new THREE.Vector3();
   function selectTarget(): Target | null {
@@ -84,13 +97,20 @@ export function startCityGame(): void {
       const row = document.createElement('div'); row.textContent = `${state.installed.includes(id) ? '◆' : state.inventory.includes(id) ? '◇' : '○'} ${(known ? materialName(id) : systemName[id]).toUpperCase()} · ${state.installed.includes(id) ? 'INSTALLED' : state.inventory.includes(id) ? 'CARRIED' : 'OFFLINE'}`; diagnostics.appendChild(row);
     }
     el('inventory').textContent = state.inventory.length ? state.inventory.map(materialName).join(' · ').toUpperCase() : 'EMPTY';
-    el('objective').textContent = isLaunchReady(state) ? 'LAUNCH THE SHIP' : `REPAIR THE SHIP · ${state.installed.length}/3`;
-    el('objective-detail').textContent = isLaunchReady(state) ? 'All systems restored. Return to the ship console and launch.' : state.claims.length ? 'Compare the stories in your journal. Find each part, then return to the ship.' : 'Talk to residents. Ask where the missing materials are.';
+    el('objective').textContent = state.shipStage === 'aboard' ? state.hasExitedShip ? 'LEAVE THE SHIP' : 'EXIT THE SHIP' : state.shipStage === 'outside' && !state.claims.length && !state.inventory.length && !state.installed.length ? 'CONCEAL THE SHIP' : state.shipStage === 'hidden' && state.inventory.length ? 'RETURN TO THE SHIP' : state.shipStage === 'hidden' && !state.claims.length ? 'FIND HELP IN THE CITY' : isLaunchReady(state) ? 'LAUNCH THE SHIP' : `REPAIR THE SHIP · ${state.installed.length}/3`;
+    el('objective-detail').textContent = state.shipStage === 'aboard' ? state.hasExitedShip ? 'Open the hatch to return to the crash site. The exterior console handles repairs and launch.' : 'Open the hatch. Your ship is down beyond the southern edge of New Eden.' : state.shipStage === 'outside' && !state.claims.length && !state.inventory.length && !state.installed.length ? 'Use the concealment control by the hatch, then follow the road north to the city.' : state.shipStage === 'hidden' && state.inventory.length ? 'Follow the southern approach back to the crash site. Reveal the wreck to install your parts.' : isLaunchReady(state) ? 'All systems restored. Return to the ship console and launch.' : state.claims.length ? 'Compare the stories in your journal. Find each part, then return to the ship.' : 'Follow the road north into New Eden and ask residents for help.';
     el('current-lead').textContent = state.lead && state.lead !== 'seek-more-evidence' ? `SHIP COMPUTER: ${state.lead.replace('@', ' / ').toUpperCase()}` : 'NO LEAD SELECTED';
+    el('current-lead').parentElement?.classList.toggle('has-lead', !!state.lead && state.lead !== 'seek-more-evidence');
     const minutes = 42 + Math.floor(state.time / 60), hour = 18 + Math.floor(minutes / 60);
     el('clock').textContent = `${String(hour % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')} / CITY TIME`;
     const x = camera.position.x, z = camera.position.z;
-    el('location-label').textContent = z < -23 && Math.abs(x) < 13 ? 'SOUTH CRASH LOT' : x < -17 && Math.abs(z) < 18 ? 'VOSS WORKSHOP' : x > 17 && z < 0 ? 'SALVAGE YARD' : x > 15 && z > 15 ? 'TRANSIT DEPOT' : 'SOUTH DISTRICT';
+    const outerDistrict = !isCrashOutskirts(z) && (Math.abs(x) > 80 || Math.abs(z) > 80)
+      ? `${Math.abs(x) > Math.abs(z) ? (x > 0 ? 'EAST' : 'WEST') : (z > 0 ? 'NORTH' : 'SOUTH')} DISTRICT`
+      : null;
+    el('district-label').textContent = isCrashOutskirts(z) ? 'NEW EDEN / SOUTHERN APPROACH' : `NEW EDEN / ${outerDistrict ?? 'SOUTH DISTRICT'}`;
+    el('location-label').textContent = isCrashOutskirts(z) ? (z < -132 ? 'CRASH SITE' : 'CITY APPROACH') : outerDistrict ?? (x < -17 && Math.abs(z) < 18 ? 'VOSS WORKSHOP' : x > 17 && z < 0 ? 'SALVAGE YARD' : x > 15 && z > 15 ? 'TRANSIT DEPOT' : 'SOUTH DISTRICT');
+    camera.getWorldDirection(direction);
+    drawCityMinimap(el<HTMLCanvasElement>('minimap'), state.player, { x: direction.x, z: direction.z });
   }
   function closeConversation(): void { conversationId = null; conversationTicket++; el('conversation').hidden = true; el<HTMLInputElement>('question').value = ''; }
   function renderConversation(id: ResidentId): void {
@@ -203,6 +223,12 @@ export function startCityGame(): void {
   });
   function interact(): void {
     if (!target) return;
+    if (target.type === 'hatch') { boardShip(); return; }
+    if (target.type === 'cloak') {
+      const updated = toggleShipCloak(state);
+      if (updated !== state) { state = updated; toast(state.shipStage === 'hidden' ? 'Ship concealed. Ask the city for help.' : 'Ship revealed. Repair console accessible.'); save(); updateHud(); }
+      return;
+    }
     if (target.type === 'resident') { openConversation(target.id as ResidentId); return; }
     if (target.type === 'switch') { const id = target.id as LocationId; state = recordObservation({ ...state, access: { ...state.access, [id]: true } }, `${id}-switch`, id === 'workshop' ? 'The yellow lever released the workshop cabinet.' : 'The green switch released the depot maintenance cage.', id); toast(id === 'workshop' ? 'Workshop cabinet released' : 'Depot maintenance cage released'); save(); return; }
     if (target.type === 'material') { const id = target.id as MaterialId; const updated = collectMaterial(state, id);
@@ -215,10 +241,32 @@ export function startCityGame(): void {
       else toast('Ship diagnostics: three missing modules. Ask around and search the district.');
     }
   }
+  function boardShip(): void {
+    const updated = enterShip(state);
+    if (updated === state) return;
+    state = updated;
+    controls.teleport(state.player.x, state.player.z, new THREE.Vector3(crashSite.ship.x, 2.2, crashSite.ship.z));
+    if (document.pointerLockElement) void document.exitPointerLock();
+    entry.classList.remove('hidden');
+    syncEntry(); save(); updateHud();
+  }
+  el<HTMLButtonElement>('ship-hatch-button').addEventListener('click', boardShip);
   el('restart').addEventListener('click', () => { localStorage.removeItem(CITY_SAVE_KEY); location.reload(); });
-  el('enter').addEventListener('click', async () => { entered = true; startCityAudio(); try { await renderer.domElement.requestPointerLock(); } catch { entry.classList.add('hidden'); toast('Pointer lock unavailable. Use keyboard to move.'); } });
-  renderer.domElement.addEventListener('click', () => { if (entered && document.pointerLockElement !== renderer.domElement && el('conversation').hidden && el('journal').hidden) void renderer.domElement.requestPointerLock(); });
-  document.addEventListener('pointerlockchange', () => { entry.classList.toggle('hidden', entered); el('enter').textContent = 'RESUME CITY'; });
+  el('enter').addEventListener('click', async () => {
+    if (state.shipStage === 'aboard') {
+      state = exitShip(state);
+      controls.teleport(state.player.x, state.player.z, new THREE.Vector3(crashSite.ship.x, 2.2, crashSite.ship.z));
+      syncEntry();
+      save(); updateHud();
+    }
+    entered = true; entry.classList.add('hidden'); startCityAudio();
+    try { await renderer.domElement.requestPointerLock(); } catch { entry.classList.add('hidden'); toast('Pointer lock unavailable. Use keyboard to move.'); }
+  });
+  renderer.domElement.addEventListener('click', () => {
+    if (entered && target?.type === 'hatch' && state.shipStage === 'outside') { boardShip(); return; }
+    if (entered && state.shipStage !== 'aboard' && document.pointerLockElement !== renderer.domElement && el('conversation').hidden && el('journal').hidden) void renderer.domElement.requestPointerLock();
+  });
+  document.addEventListener('pointerlockchange', () => { entry.classList.toggle('hidden', entered && state.shipStage !== 'aboard'); syncEntry(); });
   window.addEventListener('keydown', event => {
     if (event.repeat || state.launched) return;
     if (event.key === 'Escape') { if (!el('conversation').hidden) closeConversation(); else if (!el('journal').hidden) closeJournal(); return; }
@@ -240,16 +288,18 @@ export function startCityGame(): void {
   }
   let previous = performance.now();
   renderer.setAnimationLoop(() => {
-    const now = performance.now(), dt = Math.min((now - previous) / 1000, .07); previous = now;
-    if (entered && el('conversation').hidden && el('journal').hidden && !state.launched) { const before = camera.position.clone(); controls.update(dt); if (habitat.blocks(camera.position.x, camera.position.z)) { camera.position.x = before.x; camera.position.z = before.z; } }
-    if (entered && !state.launched) state.time += dt; state.player = { x: camera.position.x, z: camera.position.z };
-    residentViews.sync(state, state.time, conversationId); materialViews.sync(state, state.time);
+    const now = performance.now(), elapsed = Math.min(Math.max((now - previous) / 1000, 0), .5); previous = now;
+    if (entered && state.shipStage !== 'aboard' && el('conversation').hidden && el('journal').hidden && !state.launched) { const before = camera.position.clone(); controls.update(Math.min(elapsed, .07)); if (habitat.blocks(camera.position.x, camera.position.z)) { camera.position.x = before.x; camera.position.z = before.z; } }
+    if (entered && !state.launched) state.time += elapsed; state.player = { x: camera.position.x, z: camera.position.z };
+    habitat.sync(state.time, state.player, state.shipStage); residentViews.sync(state, state.time, conversationId); materialViews.sync(state, state.time);
     target = selectTarget(); const prompt = el('interaction'); prompt.textContent = target && entered && el('conversation').hidden && el('journal').hidden ? `[E] ${target.label}` : ''; prompt.classList.toggle('visible', !!prompt.textContent);
+    el<HTMLButtonElement>('ship-hatch-button').hidden = !(entered && state.shipStage === 'outside' && !state.launched && el('conversation').hidden && el('journal').hidden && distance(crashSite.hatch.x, crashSite.hatch.z) <= 5.2);
     if (now > toastUntil) el('toast').classList.remove('visible');
     if (state.time - lastHud > .3) { updateHud(); lastHud = state.time; }
     if (entered && state.time - lastSave > 8) { save(); lastSave = state.time; }
     if (entered && state.time - lastActivityTick > 1.5) { lastActivityTick = state.time; for (const id of residentIds) if (state.residents[id].nextDecisionAt <= state.time) void decideActivity(id); }
     renderer.render(scene, camera);
   });
+  syncEntry();
   updateHud(); if (state.launched) { el('ending').hidden = false; entered = true; entry.classList.add('hidden'); }
 }

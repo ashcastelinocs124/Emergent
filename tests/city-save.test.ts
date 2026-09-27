@@ -17,9 +17,13 @@ it('recovers a city save written before conversation statements and activity str
   const old = createCityState() as Partial<ReturnType<typeof createCityState>>;
   delete old.statements;
   delete old.conversations;
+  delete old.shipStage;
+  delete old.hasExitedShip;
   const store = { getItem: () => JSON.stringify(old), setItem: () => {} };
   const recovered = loadCitySave(store);
   expect(recovered?.statements).toEqual([]);
   expect(recovered?.residents.mara.activityStreak).toBe(0);
   expect(recovered?.conversations.mara).toEqual([]);
+  expect(recovered?.shipStage).toBe('outside');
+  expect(recovered?.hasExitedShip).toBe(true);
 });

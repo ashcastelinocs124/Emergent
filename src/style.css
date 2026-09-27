@@ -174,3 +174,95 @@ body:has(.entry:not(.hidden)) #visor{opacity:0}
   .journal-panel footer span{display:none}
   .ending-content{padding:30px 22px;margin:15px}
 }
+
+/* Street-first HUD: the city stays visible, with navigation in the corners. */
+.visor{font-family:ui-sans-serif,system-ui,sans-serif;color:#f8f8f3;text-shadow:0 2px 7px #000e}
+.visor-vignette{box-shadow:inset 0 0 70px #0b151c42}
+.visor-vignette:before{display:none}
+.visor-top{top:18px;left:24px;right:24px;border:0;padding:0;font-size:10px;letter-spacing:.09em}
+#district-label{display:none}
+#link-status{font-size:10px;color:#f6f8ef}
+.reticle{scale:.38;opacity:.68}
+.hud-left{top:auto;bottom:20px;left:20px;width:240px;padding:0;border:0;border-radius:0;background:none;box-shadow:none;backdrop-filter:none}
+.minimap-frame{overflow:hidden;border:2px solid #142026d9;background:#394649e8;box-shadow:0 5px 25px #0008}
+#minimap{display:block;width:100%;height:180px}
+.minimap-caption{display:flex;justify-content:space-between;align-items:center;height:28px;padding:0 8px;background:#152126e8;font-size:9px;font-weight:700;letter-spacing:.05em}
+.minimap-caption #clock{font-size:9px;font-weight:500;color:#d8ded7}
+.street-status{display:none}
+.hud-right{top:25px;right:24px;width:245px;padding:9px 12px;border:0;border-left:3px solid #e4ece4;border-radius:0;background:linear-gradient(90deg,#121d22b8,#121d223b);box-shadow:none;backdrop-filter:none}
+.hud-right small{display:none}
+.hud-right h2{font-size:15px;font-weight:800;letter-spacing:.015em;margin:0}
+.hud-right p{font-size:11px;line-height:1.35;margin:5px 0 0;color:#e0e6dc}
+.hud-right #current-lead{display:none;margin-top:7px;padding:0;border:0;font-size:10px;color:#f3dfb1}
+.hud-right.has-lead #current-lead{display:block}
+.visor-bottom{left:auto;right:27px;bottom:26px;border:0;padding:0;display:block;text-align:right}
+.visor-bottom span:first-child{display:block;font-size:9px;letter-spacing:.055em;opacity:.8;margin-bottom:10px}
+#location-label{display:block;font:italic 23px/1.1 Georgia,serif;letter-spacing:.015em;color:#fdfcf6;text-shadow:0 2px 4px #000,0 0 16px #000}
+.interaction{top:54%;border:0;border-radius:3px;background:#10191bdc;font-size:12px;padding:8px 13px;box-shadow:0 4px 15px #0007}
+.toast{bottom:12%;border:0;border-radius:3px;background:#151c1ee8;font-size:12px}
+@media(max-width:650px){
+  .visor-top{left:14px;right:14px;top:12px}
+  .visor-top span:first-child{display:none}
+  .hud-left{left:10px;bottom:11px;width:150px}
+  #minimap{height:115px}
+  .minimap-caption{height:22px;font-size:8px}
+  .minimap-caption #clock{font-size:8px}
+  .hud-right{top:12px;left:10px;right:auto;width:min(235px,70vw);padding:6px 9px}
+  .hud-right h2{font-size:12px}.hud-right p{font-size:10px}
+  .visor-bottom{right:13px;bottom:15px}
+  .visor-bottom span:first-child{display:none}
+  #location-label{font-size:15px}
+}
+
+/* The first entry is seen through the damaged ship's forward canopy. */
+.entry:not(.departed){background:linear-gradient(90deg,#0a151fe8 0%,#101e28c7 40%,#0b1b2366 75%,#0b1b2360 100%)}
+.entry:not(.departed)::before{content:'';position:absolute;inset:auto 0 0;height:20vh;background:linear-gradient(#182a32eb,#060e13fa);clip-path:polygon(0 36%,27% 4%,73% 4%,100% 36%,100% 100%,0 100%);box-shadow:0 -8px 28px #0009;pointer-events:none}
+.entry:not(.departed)::after{content:'';position:absolute;inset:0 20px 17vh;border-left:22px solid #0a141b99;border-right:22px solid #0a141b99;border-radius:0 0 36% 36%;pointer-events:none}
+.cockpit-frame{position:absolute;inset:24px 5vw auto;display:flex;justify-content:space-between;color:#aee5dc;font:600 10px ui-sans-serif,system-ui,sans-serif;letter-spacing:.18em;text-shadow:0 2px 8px #000;pointer-events:none}
+.entry-content,.entry-right{z-index:1}
+.entry:not(.departed) .entry-content{margin-top:-9vh}
+.entry:not(.departed) #enter{background:#d9eee5;color:#112528;box-shadow:0 0 0 5px #72cbbc40,0 12px 38px #0007}
+.entry:not(.departed) .entry-right{bottom:22vh}
+.cockpit-instruments{position:absolute;z-index:1;left:10vw;right:10vw;bottom:4vh;display:flex;justify-content:space-between;gap:12px;pointer-events:none}
+.cockpit-instruments span{min-width:0;flex:1;padding:10px 13px;border-top:2px solid #6e8d91;background:#0a1b22c9;font:600 10px ui-sans-serif,system-ui,sans-serif;letter-spacing:.09em;color:#a8c9c6}
+.cockpit-instruments b{display:block;margin-top:6px;font-size:13px;color:#f4ab83}
+.cockpit-instruments span:last-child b{color:#a7edd0}
+.entry.departed .cockpit-frame,.entry.departed .cockpit-instruments{display:none}
+@media(max-width:650px){.cockpit-frame{inset:15px 6vw auto;font-size:8px}.cockpit-frame span:last-child{display:none}.entry:not(.departed) .entry-content{margin-top:-5vh}.cockpit-instruments{left:5vw;right:5vw;bottom:2vh;gap:5px}.cockpit-instruments span{font-size:7px;padding:6px}.cockpit-instruments b{font-size:9px}}
+
+/* Crash opening: the landscape is seen through a full-size damaged cockpit. */
+.entry:not(.departed){background:linear-gradient(90deg,#0a131a57,#08161c0d 65%),linear-gradient(180deg,#09131967,transparent 35%,#07101683 75%)}
+.entry:not(.departed)::before,.entry:not(.departed)::after{display:none}
+.cockpit-shell{position:absolute;inset:0;overflow:hidden;pointer-events:none;color:#b6d9d2;font-family:ui-sans-serif,system-ui,sans-serif;text-shadow:0 2px 5px #061015}
+.cockpit-roof{position:absolute;top:0;left:0;right:0;height:9vh;padding:2vh 9vw;display:flex;justify-content:space-between;gap:15px;background:linear-gradient(#091016,#1b2a32 70%,#0a141b);clip-path:polygon(0 0,100% 0,100% 100%,75% 70%,25% 70%,0 100%);font:700 11px ui-sans-serif,system-ui,sans-serif;letter-spacing:.16em;z-index:2}
+.cockpit-roof span:last-child{color:#f4b48b}
+.cockpit-glass{position:absolute;inset:6vh 5vw 29vh;border:2px solid #8cb6bb54;border-bottom:0;border-radius:42% 42% 6% 6%/12% 12% 4% 4%;background:linear-gradient(125deg,#9ed2d00d 2%,transparent 35%,#b0d8d114 58%,transparent 78%),linear-gradient(#7294a313,transparent 40%);box-shadow:inset 0 0 85px #0c1b256e,0 0 0 7px #09151c9c}
+.cockpit-glass i{position:absolute;right:14%;top:18%;height:2px;background:#cde5e55c;transform-origin:right center;box-shadow:0 0 4px #dbf1ef63}
+.cockpit-glass i:nth-child(1){width:16vw;transform:rotate(40deg)}
+.cockpit-glass i:nth-child(2){width:11vw;transform:rotate(-34deg)}
+.cockpit-glass i:nth-child(3){width:7vw;top:19%;right:13%;transform:rotate(91deg)}
+.cockpit-pillar{position:absolute;top:4vh;bottom:23vh;width:9vw;min-width:70px;background:linear-gradient(90deg,#090f14,#263944 44%,#091218 75%);box-shadow:0 0 25px #030a0eae;z-index:2}
+.cockpit-pillar-left{left:0;clip-path:polygon(0 0,100% 0,65% 100%,0 100%)}
+.cockpit-pillar-right{right:0;clip-path:polygon(0 0,100% 0,100% 100%,35% 100%);transform:scaleX(-1)}
+.cockpit-dashboard{position:absolute;left:0;right:0;bottom:-1px;height:31vh;min-height:210px;background:linear-gradient(180deg,#354953 0,#15252f 12%,#0a151d 65%,#030a0f 100%);clip-path:polygon(0 19%,13% 4%,38% 0,62% 0,87% 4%,100% 19%,100% 100%,0 100%);box-shadow:inset 0 16px 22px #759ba035;display:flex;justify-content:center;gap:1.5vw;padding:7vh 6vw 10vh;z-index:2}
+.cockpit-dashboard::before{content:'';position:absolute;left:11%;right:11%;top:4vh;height:2px;background:#86b6b2a3;box-shadow:0 0 13px #88c4b4}
+.cockpit-screen{width:21%;max-width:330px;height:10vh;min-height:70px;background:linear-gradient(150deg,#12313a,#091921);border:2px solid #567c83;border-radius:8px;padding:1.2vh 1.2vw;box-shadow:inset 0 0 24px #54c7b025,0 5px 12px #02070cb2}
+.cockpit-screen-main{width:27%;border-color:#b7775e;box-shadow:inset 0 0 24px #e467442b,0 5px 12px #02070cb2}
+.cockpit-screen small,.cockpit-screen span{display:block;font-size:clamp(8px,.67vw,11px);letter-spacing:.11em}
+.cockpit-screen strong{display:block;font-size:clamp(14px,1.7vw,27px);letter-spacing:.04em;margin:.25vh 0;color:#c4f5e8}
+.cockpit-screen-main strong{color:#ffb389}
+.cockpit-yoke{position:absolute;bottom:5vh;right:12vw;width:12vw;height:12vw;max-width:155px;max-height:155px;border:13px solid #1a2a32;border-radius:50%;box-shadow:inset 0 0 0 4px #658087,0 0 0 2px #607881,0 10px 20px #000b;z-index:3;transform:rotate(-16deg)}
+.cockpit-yoke::after{content:'';position:absolute;left:46%;top:70%;width:8%;height:11vh;background:linear-gradient(90deg,#182932,#5c7074,#14232d);z-index:-1}
+.entry:not(.departed) .entry-content{position:absolute;left:9vw;top:13vh;max-width:min(450px,40vw);margin:0;padding:22px 25px 24px;border:1px solid #c5e9dc6e;border-radius:10px;background:#0b1c25c9;box-shadow:0 18px 52px #0008;backdrop-filter:blur(6px)}
+.entry:not(.departed) .entry-content h1{font-size:clamp(54px,5.5vw,86px);line-height:.84;margin:18px 0 22px}
+.entry:not(.departed) .entry-subtitle{font-size:clamp(23px,2vw,30px)}
+.entry:not(.departed) .entry-copy{font-size:13px;line-height:1.5}
+.entry:not(.departed) .entry-controls{font-size:9px;line-height:1.5;margin-top:16px}
+.entry:not(.departed) .entry-right,.entry:not(.departed) .cockpit-frame{display:none}
+.cockpit-instruments{z-index:4;bottom:2.4vh;left:12vw;right:12vw;gap:1vw}
+.cockpit-instruments span{background:#091820e8;border:1px solid #668b8d;border-top:3px solid #a6c4ba;border-radius:4px;padding:1vh 1vw;font-size:9px}
+.entry.departed .cockpit-shell{display:none}
+.ship-hatch-button{position:absolute;left:50%;top:62%;transform:translateX(-50%);z-index:2;pointer-events:auto;min-width:150px;border:1px solid #a7dfd0;border-radius:4px;background:#102b2ce8;color:#ebfff3;box-shadow:0 0 0 4px #102b2c6e,0 8px 30px #0009;padding:12px 20px;font:700 12px ui-sans-serif,system-ui,sans-serif;letter-spacing:.13em;backdrop-filter:blur(10px)}
+.ship-hatch-button:hover{background:#245d58}.ship-hatch-button[hidden]{display:none}.cockpit-instruments b.online{color:#a7edd0}
+@media(max-width:800px){.entry:not(.departed) .entry-content{left:8vw;top:12vh;max-width:70vw}.cockpit-screen:first-child,.cockpit-screen:last-child{display:none}.cockpit-screen-main{width:54%;margin-left:12vw}.cockpit-yoke{right:8vw;bottom:10vh}.cockpit-instruments{left:5vw;right:5vw}.cockpit-instruments span{padding:5px;font-size:7px}.cockpit-instruments b{font-size:9px}}
+@media(max-height:650px){.entry:not(.departed) .entry-content{top:10vh;padding:15px 19px}.entry:not(.departed) .entry-content h1{font-size:50px;margin:10px 0}.entry:not(.departed) .entry-copy{font-size:11px}.entry:not(.departed) .entry-controls{display:none}.cockpit-screen{display:none}}

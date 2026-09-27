@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createCityState, recordClaim, setAssumption, collectMaterial, installMaterial, isLaunchReady } from '../src/city/state';
+import { createCityState, enterShip, exitShip, toggleShipCloak, recordClaim, setAssumption, collectMaterial, installMaterial, isLaunchReady } from '../src/city/state';
+import { crashSite } from '../src/city/geography';
 
 describe('city evidence and repairs', () => {
   it('keeps attributed contradictory claims and rejects invented evidence', () => {
@@ -18,11 +19,44 @@ describe('city evidence and repairs', () => {
     expect(collectMaterial(atWorkshop, 'power-cell').inventory).toContain('power-cell');
   });
   it('launches only after all three carried materials are installed at the ship', () => {
-    let state = createCityState();
+    let state = exitShip(createCityState());
     expect(isLaunchReady(state)).toBe(false);
-    state = { ...state, player: { x: 0, z: -29 }, inventory: ['power-cell', 'thermal-shield', 'navigation-relay'] };
+    state = { ...state, player: { ...crashSite.console }, inventory: ['power-cell', 'thermal-shield', 'navigation-relay'] };
     for (const id of ['power-cell', 'thermal-shield', 'navigation-relay'] as const) state = installMaterial(state, id);
     expect(isLaunchReady(state)).toBe(true);
+  });
+  it('starts aboard, exits at the ramp, and conceals or reveals the ship only nearby', () => {
+    const aboard = createCityState();
+    expect(aboard.shipStage).toBe('aboard');
+    expect(toggleShipCloak(aboard)).toBe(aboard);
+    const outside = exitShip(aboard);
+    expect(outside.shipStage).toBe('outside');
+    expect(outside.player).toEqual(crashSite.exit);
+    expect(outside.player.z).toBeLessThan(-100);
+    const hidden = toggleShipCloak(outside);
+    expect(hidden.shipStage).toBe('hidden');
+    expect(toggleShipCloak({ ...hidden, player: { x: 90, z: 90 } })).toEqual({ ...hidden, player: { x: 90, z: 90 } });
+    expect(toggleShipCloak(hidden).shipStage).toBe('outside');
+  });
+  it('re-enters only at the revealed hatch and can leave again without losing progress', () => {
+    const outside = exitShip(recordClaim(createCityState(), 'mechanic-power'));
+    expect(outside.hasExitedShip).toBe(true);
+    expect(enterShip(outside)).toBe(outside);
+    const atHatch = { ...outside, player: { ...crashSite.hatch }, inventory: ['power-cell' as const] };
+    expect(enterShip({ ...atHatch, shipStage: 'hidden' })).toEqual({ ...atHatch, shipStage: 'hidden' });
+    expect(enterShip({ ...atHatch, launched: true })).toEqual({ ...atHatch, launched: true });
+    const aboard = enterShip(atHatch);
+    expect(aboard.shipStage).toBe('aboard');
+    expect(aboard.player).toEqual(crashSite.aboard);
+    expect(aboard.inventory).toEqual(['power-cell']);
+    expect(aboard.claims).toEqual(outside.claims);
+    expect(exitShip(aboard)).toMatchObject({ shipStage: 'outside', player: crashSite.exit, hasExitedShip: true, inventory: ['power-cell'] });
+  });
+  it('requires the wreck to be revealed before installing a part', () => {
+    const outside = exitShip(createCityState());
+    const atConsole = { ...outside, player: { ...crashSite.console }, inventory: ['power-cell' as const] };
+    expect(installMaterial({ ...atConsole, shipStage: 'hidden' }, 'power-cell').installed).toEqual([]);
+    expect(installMaterial(atConsole, 'power-cell').installed).toEqual(['power-cell']);
   });
 });
 

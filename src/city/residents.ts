@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { residentIds, residents, materialIds, materials } from './content';
+import { createAmbientCrowd } from './crowd';
+import { createGroundTraffic } from './ground-traffic';
+import { createServiceRobots } from './robots';
 import type { CityState, MaterialId, ResidentId } from './model';
 const fabrics = new Map<number, THREE.MeshStandardMaterial>();
 const fabric = (color: number) => {
@@ -85,6 +88,9 @@ function nameTag(name: string): THREE.Sprite | null {
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: true, transparent: true })); sprite.position.y = 2.85; sprite.scale.set(1.9, .36, 1); return sprite;
 }
 export function createResidentViews(scene: THREE.Scene) {
+  const ambientCrowd = createAmbientCrowd(scene);
+  const groundTraffic = createGroundTraffic(scene);
+  const serviceRobots = createServiceRobots(scene);
   const profiles: Record<ResidentId, PersonProfile> = {
     mara: { coat: 0x595a4a, trousers: 0x353a3a, skin: 0xb78d72, hair: 0x292421, height: 1.02, role: 'mara' },
     eli: { coat: 0x45596a, trousers: 0x303947, skin: 0x91634e, hair: 0x211e20, height: 1.03, role: 'eli' },
@@ -100,17 +106,7 @@ export function createResidentViews(scene: THREE.Scene) {
     const side = i % 2 ? -1 : 1;
     const rig = human({ coat: [0x5f6872, 0x746456, 0x63746a, 0x886e68, 0x5d5f72][i % 5], trousers: [0x303839, 0x41413f, 0x2c343b][i % 3], skin: [0x704d3e, 0xb58a6e, 0xc5a389, 0x8e624d][i % 4], hair: [0x251f1b, 0x34332f, 0x4a4135][i % 3], height: .93 + (i % 5) * .025 });
     rig.group.position.set(side * (12.7 + (i % 3) * .35), 0, -56 + i * 4.75);
-    scene.add(rig.group); pedestrians.push({ rig, direction: i % 4 < 2 ? 1 : -1, speed: .65 + (i % 4) * .13, waitingUntil: 0 });
-  }
-  const cars: { group: THREE.Group; direction: number }[] = [];
-  for (let i = 0; i < 4; i++) {
-    const group = new THREE.Group(); const paint = new THREE.MeshStandardMaterial({ color: [0x4a7180, 0x9a715d, 0x6f8179, 0x6c6d7c][i], metalness: .55, roughness: .32 });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(2, .72, 4.25), paint); body.position.y = .79; body.castShadow = true; group.add(body);
-    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.75, .65, 2.1), paint); cabin.position.set(0, 1.36, -.17); group.add(cabin);
-    const glass = new THREE.Mesh(new THREE.BoxGeometry(1.65, .54, 2.01), new THREE.MeshStandardMaterial({ color: 0x304e58, metalness: .45, roughness: .12 })); glass.position.set(0, 1.4, -.17); group.add(glass);
-    for (const x of [-.68, .68]) { const headlight = new THREE.Mesh(new THREE.BoxGeometry(.42, .2, .04), new THREE.MeshStandardMaterial({ color: 0xffe5b7, emissive: 0xbba074, emissiveIntensity: .7 })); headlight.position.set(x, .84, 2.15); group.add(headlight); const tail = new THREE.Mesh(new THREE.BoxGeometry(.35, .18, .04), fabric(0x9b322d)); tail.position.set(x, .84, -2.15); group.add(tail); }
-    for (const side of [-1, 1]) for (const z of [-1.2, 1.2]) { const wheel = new THREE.Mesh(new THREE.CylinderGeometry(.34, .34, .2, 10), fabric(0x20272a)); wheel.rotation.z = Math.PI / 2; wheel.position.set(side * 1, .35, z); group.add(wheel); }
-    group.position.set(i % 2 ? 3.5 : -3.5, 0, -12 + i * 22); if (i % 2) group.rotation.y = Math.PI; scene.add(group); cars.push({ group, direction: i % 2 ? -1 : 1 });
+    scene.add(rig.group); pedestrians.push({ rig, direction: i % 4 < 2 ? 1 : -1, speed: 1.2 + (i % 4) * .15, waitingUntil: 0 });
   }
   let previousElapsed = 0;
   return { sync(state: CityState, elapsed: number, speakingTo: ResidentId | null = null) {
@@ -118,7 +114,7 @@ export function createResidentViews(scene: THREE.Scene) {
     for (const id of residentIds) {
       const current = state.residents[id], rig = views[id], view = rig.group;
       const base = residents[id];
-      const walkPhase = elapsed * .33 + residentIds.indexOf(id);
+      const walkPhase = elapsed * .5 + residentIds.indexOf(id);
       const moving = current.activity === 'walk' && speakingTo !== id && Math.abs(Math.cos(walkPhase)) > .14;
       const offset = current.activity === 'walk' ? Math.sin(walkPhase) * 2.4 : current.activity === 'watch' ? .65 : 0;
       if (speakingTo !== id) {
@@ -141,8 +137,10 @@ export function createResidentViews(scene: THREE.Scene) {
       rig.group.rotation.y = person.direction > 0 ? 0 : Math.PI;
       pose(rig, elapsed * (4.5 + person.speed) + index, moving);
     });
-    cars.forEach(({ group, direction }) => { group.position.z += direction * 3.2 * dt; if (group.position.z > 68) group.position.z = -15; if (group.position.z < -15) group.position.z = 68; });
-  }, dispose() { Object.values(views).forEach(rig => scene.remove(rig.group)); pedestrians.forEach(person => scene.remove(person.rig.group)); cars.forEach(car => scene.remove(car.group)); } };
+    ambientCrowd.sync(elapsed, state.player);
+    serviceRobots.sync(elapsed, state.player);
+    groundTraffic.sync(elapsed, state.player);
+  }, dispose() { Object.values(views).forEach(rig => scene.remove(rig.group)); pedestrians.forEach(person => scene.remove(person.rig.group)); ambientCrowd.dispose(); serviceRobots.dispose(); groundTraffic.dispose(); } };
 }
 export function createMaterialViews(scene: THREE.Scene) {
   const views = Object.fromEntries(materialIds.map(id => {

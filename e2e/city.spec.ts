@@ -1,6 +1,37 @@
 import { test, expect, type Page } from '@playwright/test';
-type CityDebug = { getState(): { claims: { id: string }[]; inventory: string[]; installed: string[]; launched: boolean; access: Record<string, boolean>; conversations: Record<string, { text: string }[]> }; getTarget(): { id: string } | null; teleport(x: number, z: number, lookX: number, lookZ: number): void };
+type CityDebug = { getState(): { time: number; shipStage: 'aboard' | 'outside' | 'hidden'; claims: { id: string }[]; inventory: string[]; installed: string[]; launched: boolean; access: Record<string, boolean>; conversations: Record<string, { text: string }[]> }; getTarget(): { id: string } | null; teleport(x: number, z: number, lookX: number, lookZ: number): void };
 declare global { interface Window { __cityDebug: CityDebug } }
+
+test('city time keeps pace with real time while traffic renders', async ({ page }) => {
+  await page.goto('/?debug=1');
+  await page.locator('#enter').click();
+  await page.evaluate(() => window.__cityDebug.teleport(0, -30, 0, 50));
+  const before = await page.evaluate(() => window.__cityDebug.getState().time);
+  await page.waitForTimeout(2400);
+  const after = await page.evaluate(() => window.__cityDebug.getState().time);
+  expect(after - before).toBeGreaterThan(1.5);
+});
+test('the hatch button enters the ship and the cockpit button leaves it again', async ({ page }) => {
+  await page.goto('/?debug=1');
+  await page.getByRole('button', { name: 'EXIT SHIP' }).click();
+  await page.evaluate(() => window.__cityDebug.teleport(-20, -168, -20, -171));
+  await expect.poll(() => page.evaluate(() => window.__cityDebug.getTarget()?.id)).toBe('hatch');
+  await expect(page.getByRole('button', { name: 'ENTER SHIP' })).toBeVisible();
+  await page.getByRole('button', { name: 'ENTER SHIP' }).click();
+  await expect.poll(() => page.evaluate(() => window.__cityDebug.getState().shipStage)).toBe('aboard');
+  await expect(page.locator('#entry-title')).toContainText('SHIP');
+  await page.reload();
+  await expect(page.locator('#entry-title')).toContainText('SHIP');
+  await expect.poll(() => page.evaluate(() => window.__cityDebug.getState().shipStage)).toBe('aboard');
+  await expect(page.getByRole('button', { name: 'EXIT SHIP' })).toBeVisible();
+  await page.getByRole('button', { name: 'EXIT SHIP' }).click();
+  await expect.poll(() => page.evaluate(() => window.__cityDebug.getState().shipStage)).toBe('outside');
+  await expect(page.getByRole('button', { name: 'ENTER SHIP' })).toBeHidden();
+  await page.evaluate(() => window.__cityDebug.teleport(-20, -168, -20, -171));
+  await expect.poll(() => page.evaluate(() => window.__cityDebug.getTarget()?.id)).toBe('hatch');
+  await page.keyboard.press('e');
+  await expect.poll(() => page.evaluate(() => window.__cityDebug.getState().shipStage)).toBe('aboard');
+});
 async function aim(page: Page, id: string, x: number, z: number, fromX: number, fromZ: number) {
   await page.evaluate(({ x, z, fromX, fromZ }) => window.__cityDebug.teleport(fromX, fromZ, x, z), { x, z, fromX, fromZ });
   await expect.poll(() => page.evaluate(() => window.__cityDebug.getTarget()?.id)).toBe(id);
@@ -8,8 +39,15 @@ async function aim(page: Page, id: string, x: number, z: number, fromX: number, 
 test('the explorer hears city claims, records a theory, repairs the ship, and escapes', async ({ page }) => {
   test.setTimeout(60_000);
   await page.goto('/?debug=1');
-  await expect(page.getByRole('button', { name: 'ENTER THE CITY' })).toBeVisible();
-  await page.getByRole('button', { name: 'ENTER THE CITY' }).click();
+  expect(await page.evaluate(() => window.__cityDebug.getState().shipStage)).toBe('aboard');
+  await expect(page.getByRole('button', { name: 'EXIT SHIP' })).toBeVisible();
+  await expect(page.locator('.cockpit-shell')).toBeVisible();
+  await page.getByRole('button', { name: 'EXIT SHIP' }).click();
+  expect(await page.evaluate(() => window.__cityDebug.getState().shipStage)).toBe('outside');
+  await expect(page.locator('#location-label')).toContainText('CRASH SITE');
+  await aim(page, 'cloak', -19, -165, -17, -162); await page.keyboard.press('e');
+  expect(await page.evaluate(() => window.__cityDebug.getState().shipStage)).toBe('hidden');
+  await expect(page.locator('#objective')).toContainText('FIND HELP');
   await aim(page, 'mara', -20, -9, -20, -12); await page.keyboard.press('e');
   await expect(page.getByRole('dialog', { name: 'Conversation' })).toBeVisible();
   await expect(page.locator('#question')).toHaveValue('');
@@ -35,13 +73,15 @@ test('the explorer hears city claims, records a theory, repairs the ship, and es
   await expect.poll(() => page.evaluate(() => window.__cityDebug.getState().access['transit-depot'])).toBe(true);
   await aim(page, 'navigation-relay', 22, 28, 22, 25); await page.keyboard.press('e');
   await expect.poll(() => page.evaluate(() => window.__cityDebug.getState().inventory.includes('navigation-relay'))).toBe(true);
-  await aim(page, 'ship', 0, -27, 0, -30);
+  await aim(page, 'cloak', -19, -165, -17, -162); await page.keyboard.press('e');
+  expect(await page.evaluate(() => window.__cityDebug.getState().shipStage)).toBe('outside');
+  await aim(page, 'ship', -27, -168, -27, -171);
   for (let i = 0; i < 3; i++) await page.keyboard.press('e');
   await expect.poll(() => page.evaluate(() => window.__cityDebug.getState().installed.length)).toBe(3);
   await expect(page.locator('#objective-detail')).toContainText('Return to the ship console and launch');
   await page.keyboard.press('e');
   await expect(page.getByRole('dialog', { name: 'Escape complete' })).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem('alien-ecosystem:city:v1'))).toBeTruthy();
+  expect(await page.evaluate(() => localStorage.getItem('alien-ecosystem:city:v2'))).toBeTruthy();
   expect(await page.evaluate(() => localStorage.getItem('alien-ecosystem:expedition:v1'))).toBeNull();
 });
 test('unknown question adds no claim', async ({ page }) => {
@@ -84,27 +124,39 @@ test('a chat outage shows the selected sourced account and keeps the repair clue
 });
 
 test('closing conversation discards a late OpenAI reply', async ({ page }) => {
-  await page.route('**/api/city-chat', async route => { await new Promise(resolve => setTimeout(resolve, 900)); await route.continue(); });
+  let releaseReply = () => {};
+  const replyGate = new Promise<void>(resolve => { releaseReply = resolve; });
+  await page.route('**/api/city-chat', async route => { await replyGate; await route.continue(); });
   await page.goto('/?debug=1'); await page.locator('#enter').click();
   await aim(page, 'mara', -20, -9, -20, -12); await page.keyboard.press('e');
   await page.locator('#question').fill('Where is a power cell?'); await page.locator('#question-form button').click();
   await expect(page.locator('#conversation-status')).toContainText('WAITING FOR REPLY');
+  const reply = page.waitForResponse('**/api/city-chat');
   await page.locator('#conversation-close').click();
-  await page.waitForTimeout(1100);
+  releaseReply();
+  await reply;
+  await page.waitForTimeout(100);
   expect(await page.evaluate(() => window.__cityDebug.getState().claims.length)).toBe(0);
   expect(await page.evaluate(() => window.__cityDebug.getState().conversations.mara.length)).toBe(0);
 });
 
 test('a closed conversation ignores a late Jev reply', async ({ page }) => {
+  let releaseReply = () => {};
+  let markRequestSeen = () => {};
+  const replyGate = new Promise<void>(resolve => { releaseReply = resolve; });
+  const requestSeen = new Promise<void>(resolve => { markRequestSeen = resolve; });
   await page.route('**/api/city-choice', async route => {
-    if (route.request().postDataJSON()?.kind === 'dialogue') await new Promise(resolve => setTimeout(resolve, 700));
+    if (route.request().postDataJSON()?.kind === 'dialogue') { markRequestSeen(); await replyGate; }
     await route.continue();
   });
   await page.goto('/?debug=1'); await page.locator('#enter').click();
   await aim(page, 'mara', -20, -9, -20, -12); await page.keyboard.press('e');
   await page.locator('#question').fill('power cell'); await page.locator('#question-form button').click();
+  await requestSeen;
+  const reply = page.waitForResponse(response => response.url().includes('/api/city-choice') && response.request().postDataJSON()?.kind === 'dialogue');
   await page.locator('#conversation-close').click();
-  await page.waitForTimeout(1000);
+  releaseReply();
+  await reply;
   expect(await page.evaluate(() => window.__cityDebug.getState().claims.length)).toBe(0);
 });
 
